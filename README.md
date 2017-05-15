@@ -2,7 +2,7 @@
 
 **Version 0.1**
 
-Population genetic analyses performed using principal components for next-generation sequencing data. Using the principal components estimated from the covariance matrix to make a linear model of the genotype dosages to estimate the individual allele frequencies of each individual in all sites. The individual allele frequencies can then be used in an iterative manner due to a bayesian approach in estimating posterior genotypes to produce a new covariance matrix and its corresponding principal components, which once again can be used to estimate a set of updated individual allele frequencies. PCAngsd performs this iterative update until convergence.
+Population genetic analyses performed using principal components for next-generation sequencing data. Using the principal components estimated from the covariance matrix to make a linear model of the genotype dosages to estimate the individual allele frequencies of each individual in all sites. The individual allele frequencies can then be used in a bayesian approach to estimate the posterior genotypes as previously done with population allele frequencies in order to produce a new covariance matrix and its corresponding principal components, which once again can be used to estimate a set of updated individual allele frequencies. PCAngsd performs this iterative update until convergence.
 
 The estimated individual allele frequencies and principal components can then be used as prior knowledge in various population genetic analyses where some are already implemented in PCAngsd (Covariance matrix, Inbreeding, Selection scan, Kinship).
 
@@ -15,6 +15,8 @@ cd pcangsd/
 ```
 
 ## Usage
+A full wiki of how to use all the features of PCAngsd will soon be made available on [popgen.dk](http://popgen.dk/front/). 
+
 PCAngsd is used by running the main caller file pcangsd.py. To see all available options use the following command:
 ```
 python pcangsd.py -h
