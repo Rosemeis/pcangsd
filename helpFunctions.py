@@ -1,5 +1,5 @@
 """
-Helper functions to use in the PCAngsd framework.
+Help functions to use in the PCAngsd framework.
 """
 
 __author__ = "Jonas Meisner"
@@ -38,21 +38,10 @@ def genoLikes(x, d=5, e=0.01, norm=False):
 	return like
 
 
-# Linear least squares model with Tikhonov regularizaton (Ridge regression)
-def linReg(X, y, reg=True):
-	if reg:
-		Tau = np.eye(X.shape[1])*0.1*np.arange(X.shape[1])
-		B = np.dot(np.dot(np.linalg.inv(np.dot(X.T, X) + np.dot(Tau.T, Tau)), X.T), y)
-	else:
-		B = np.dot(np.dot(np.linalg.inv(np.dot(X.T, X)), X.T), y)
-		
-	return B
-
-
 # Linear least squares model with Tikhonov regularization for LD regression
 def linRegLD(X, y, reg=True):
 	if reg:
-		Tau = np.eye(X.shape[1])*0.01
+		Tau = np.eye(X.shape[1])
 		B = np.dot(np.dot(np.linalg.inv(np.dot(X.T, X) + np.dot(Tau.T, Tau)), X.T), y)
 	else:
 		B = np.dot(np.dot(np.linalg.inv(np.dot(X.T, X)), X.T), y)

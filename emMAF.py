@@ -37,6 +37,6 @@ def alleleEM(likeMatrix, EM=1000, EM_tole=1e-6):
 			print "EM (MAF) converged at iteration: " + str(iteration)
 			break
 
-		f_prev = f
+		f_prev = np.copy(f)
 
 	return f

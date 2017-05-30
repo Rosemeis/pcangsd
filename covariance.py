@@ -85,18 +85,21 @@ def PCAngsd(likeMatrix, EVs, M, EM, M_tole=1e-5, EM_tole=1e-6, lrReg=False):
 
 
 		V = eigVecs[:, sort[:nEV]] # Sorted eigenvectors regarding eigenvalue size
-		predEG = np.zeros((m, nSites)) # Matrix for predicted expected genotypes
 
-		# Linear regressions
+		# Multiple linear regression
 		V_bias = np.hstack((np.ones((m, 1)), V)) # Add bias term
-		for s in range(nSites):
-			y = expG[:,s] # Expected genotypes in site
-			B = linReg(V_bias, y, lrReg) # Estimated parameters
-			predEG[:,s] = np.dot(V_bias, B) # New expected genotypes
 
+		if lrReg:
+			Tau = np.eye(V_bias.shape[1])*0.1*np.arange(V_bias.shape[1])
+			hatX = np.dot(np.linalg.inv(np.dot(V_bias.T, V_bias) + np.dot(Tau.T, Tau)), V_bias.T)
+		else:
+			hatX = np.dot(np.linalg.inv(np.dot(V_bias.T, V_bias)), V_bias.T)
+
+		predEG = np.dot(V_bias, np.dot(hatX, expG))
 		predF = predEG/2 # Estimated allele frequencies from expected genotypes
 		predF = predF.clip(min=0.00001, max=1-0.00001)
-	
+		
+		# Estimate covariance matrix
 		for ind in range(m):
 			# Genotype frequencies based on individual allele frequencies under HWE 
 			fMatrix = np.vstack(((1-predF[ind])**2, 2*predF[ind]*(1-predF[ind]), predF[ind]**2))
@@ -109,17 +112,17 @@ def PCAngsd(likeMatrix, EVs, M, EM, M_tole=1e-5, EM_tole=1e-6, lrReg=False):
 			# Estimate diagonal entries in covariance matrix
 			diagC[ind] = np.sum(np.sum((((gVector*np.ones((nSites, 3))).T - 2*f)*gProp)**2, axis=0)/(normV**2))/nSites
 
-		C = np.dot((expG - 2*f)/normV, ((expG - 2*f)/normV).T)/nSites
-		np.fill_diagonal(C, diagC)
+		C = np.dot((expG - 2*f)/normV, ((expG - 2*f)/normV).T)/nSites # Covariance matrix for i != j
+		np.fill_diagonal(C, diagC) # Entries for i == j
 
 		# Break iterative covariance update if converged
 		updateDiff = rmse(predEG, prevEG)
-		print "Covariance matrix computed	(" +str(iteration) + "). Diff=" + str(updateDiff)
+		print "Covariance matrix computed	(" +str(iteration) + ") Diff=" + str(updateDiff)
 		if updateDiff <= M_tole:
 			print "PCAngsd converged at iteration: " + str(iteration)
 			break
 
-		prevEG = predEG # Update break condition
+		prevEG = np.copy(predEG) # Update break condition
 
 	X = (expG - 2*f)/normV
-	return C, f, predF, nEV, mask, X
+	return C, f, predF, nEV, mask, expG, X

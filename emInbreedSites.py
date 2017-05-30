@@ -15,8 +15,8 @@ from helpFunctions import *
 import numpy as np
 
 
-# EM algorithm for estimation of minor allele frequencies
-def inbreedSitesEM(likeMatrix, f, model=1, EM=1000, EM_tole=1e-6):
+# EM algorithm for estimation of inbreeding coefficients
+def inbreedSitesEM(likeMatrix, f, model=1, EM=200, EM_tole=1e-4):
 	mTotal, n = likeMatrix.shape # Dimension of likelihood matrix
 	m = mTotal/3 # Number of individuals
 	F = np.random.rand(n) # Random intialization of inbreeding coefficients
@@ -52,7 +52,7 @@ def inbreedSitesEM(likeMatrix, f, model=1, EM=1000, EM_tole=1e-6):
 				print "EM (Inbreeding) converged at iteration: " + str(iteration)
 				break
 
-			F_prev = F
+			F_prev = np.copy(F)
 
 
 	elif model == 2: # Secondary model - Simple estimator (Vieira-model)
@@ -89,6 +89,6 @@ def inbreedSitesEM(likeMatrix, f, model=1, EM=1000, EM_tole=1e-6):
 				print "EM (Inbreeding) converged at iteration: " + str(iteration)
 				break
 
-			F_prev = F
+			F_prev = np.copy(F)
 
 	return F

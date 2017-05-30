@@ -11,10 +11,6 @@ import numpy as np
 def kinshipConomos(likeMatrix, f):
 	mTotal, n = likeMatrix.shape # Dimension of likelihood matrix
 	m = mTotal/3 # Number of individuals
-
-	# Test for dimension of allele frequencies
-	assert (f.ndim == 2), "The individual allele frequencies is needed to compute the kinship matrix!"
-
 	num = np.zeros((m, n)) # Container for numerator in estimation
 	numDiag = np.zeros(m) # Container for diagonal of the numerator
 	dem = np.zeros((m, n)) # Container for denominator in estimation
