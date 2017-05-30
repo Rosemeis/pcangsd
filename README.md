@@ -15,7 +15,7 @@ cd pcangsd/
 ```
 
 ## Usage
-A full wiki of how to use all the features of PCAngsd will soon be made available on [popgen.dk](http://popgen.dk/front/). 
+A full wiki of how to use all the features of PCAngsd will soon be made available on [popgen.dk](http://www.popgen.dk/software/index.php/PCAngsd). 
 
 PCAngsd is used by running the main caller file pcangsd.py. To see all available options use the following command:
 ```
