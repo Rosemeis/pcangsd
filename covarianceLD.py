@@ -40,7 +40,7 @@ def PCAngsdLD(likeMatrix, LD, EVs, M, f, M_tole=1e-4, lrReg=False):
 	np.fill_diagonal(C, diagC) # Entries for i == j
 	print "Covariance matrix computed	(Fumagalli)"
 	
-	prevEG = np.ones((m, n))*np.inf # Container for break condition
+	prevF = np.ones((m, n))*np.inf # Container for break condition
 	nEV = EVs
 	
 	# Iterative covariance estimation
@@ -123,13 +123,13 @@ def PCAngsdLD(likeMatrix, LD, EVs, M, f, M_tole=1e-4, lrReg=False):
 		np.fill_diagonal(C, diagC) # Entries for i == j
 
 		# Break iterative covariance update if converged
-		updateDiff = rmse(predEG, prevEG)
+		updateDiff = rmse(predF, prevF)
 		print "Covariance matrix computed	(" +str(iteration) + ") Diff=" + str(updateDiff)
 		if updateDiff <= M_tole:
 			print "PCAngsd converged at iteration: " + str(iteration)
 			break
 
-		prevEG = np.copy(predEG) # Update break condition
+		prevF = np.copy(predF) # Update break condition
 
 	
 	# LD regression
