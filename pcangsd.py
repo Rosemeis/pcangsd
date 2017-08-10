@@ -21,8 +21,12 @@ import numpy as np
 import pandas as pd
 
 # Argparse
-parser = argparse.ArgumentParser()
-parser.add_argument("input", metavar="BEAGLE", help="Input file of genotype likelihoods in beagle format")
+parser = argparse.ArgumentParser(prog="PCAngsd")
+parser.add_argument("--version", action="version", version="%(prog)s 0.2")
+parser.add_argument("-beagle", metavar="BEAGLE", action="store", 
+	help="Input file of genotype likelihoods in Beagle format")
+parser.add_argument("-beaglelist", metavar="LIST", action="store", 
+	help="List of input files of genotype likelihoods in beagle format")
 parser.add_argument("-M", metavar="INT", action="store", type=int, default=100,
 	help="Maximum iterations for covariance estimation (100)")
 parser.add_argument("-M_tole", metavar="FLOAT", action="store", type=float, default=1e-4,
@@ -34,15 +38,17 @@ parser.add_argument("-EM_tole", metavar="FLOAT", action="store", type=float, def
 parser.add_argument("-e", metavar="INT", action="store", type=int, default=0,
 	help="Manual selection of eigenvectors used for linear regression")
 parser.add_argument("-reg", action="store_true",
-	help="Toggle Tikhonov regularization in linear regression")
+	help="(PROTOTYPE) Toggle Tikhonov regularization in linear regression")
 parser.add_argument("-LD", metavar="INT", action="store", type=int,
-	help="Choose number of preceeding sites for LD regression")
-parser.add_argument("-callGeno", action="store_true",
+	help="(PROTOTYPE) Choose number of preceding sites for LD regression")
+parser.add_argument("-geno", metavar="FLOAT", action="store", type=float,
 	help="Call genotypes from posterior probabilities using individual allele frequencies as prior")
+parser.add_argument("-genoInbreed", metavar="FLOAT", action="store", type=float,
+	help="Call genotypes from posterior probabilities using individual allele frequencies and inbreeding coefficients as prior")
 parser.add_argument("-inbreed", metavar="INT", action="store", type=int,
 	help="Compute the per-individual inbreeding coefficients by specified model")
-parser.add_argument("-inbreedSites", metavar="INT", action="store", type=int,
-	help="Compute the per-site inbreeding coefficients by specified model")
+parser.add_argument("-inbreedSites", action="store_true",
+	help="Compute the per-site inbreeding coefficients by specified model and LRT")
 parser.add_argument("-inbreed_iter", metavar="INT", action="store", type=int, default=200,
 	help="Maximum iterations for inbreeding coefficients estimation (200)")
 parser.add_argument("-inbreed_tole", metavar="FLOAT", action="store", type=float, default=1e-4,
@@ -66,15 +72,12 @@ param_kinship = False
 if args.LD != None:
 	param_LD = True
 
-if args.callGeno:
-	param_call = True
-
 if args.inbreed != None:
 	param_inbreed = True
 	if args.inbreed == 3:
 		param_kinship = True
 
-if args.inbreedSites != None:
+if args.inbreedSites:
 	param_inbreedSites = True
 
 if args.selection != None:
@@ -83,27 +86,53 @@ if args.selection != None:
 if args.kinship:
 	param_kinship = True
 
+if args.geno != None:
+	param_call = True
 
-# Parse likelihood file
-likeDF = pd.read_csv(str(args.input), sep="\t")
-likeMatrix = likeDF.ix[:, 3:].as_matrix().T
-pos = likeDF.ix[:, 0]
-print "Parsed beagle file"
+
+# Parse Beagle file(s)
+if args.beagle != None:
+	print "Parsing beagle file"
+	likeDF = pd.read_csv(str(args.beagle), sep="\t")
+	likeMatrix = likeDF.ix[:, 3:].as_matrix().T
+	pos = likeDF.ix[:, 0]
+
+elif args.beaglelist != None:
+	f = open(str(args.beaglelist), "r")
+	likeList = f.readlines()
+	print "Parsing " + str(len(likeList)) + " beagle files"
+	f.close()
+	likeDF = pd.read_csv(likeList[0].replace("\n",""), sep="\t")
+	print "Parsed 1/" + str(len(likeList))
+	
+	for i in range(1, len(likeList)):
+		likeDF_2 = pd.read_csv(likeList[i].replace("\n",""), sep="\t")
+		likeDF = pd.concat([likeDF, likeDF_2], ignore_index=True)
+		print "Parsed " + str(i+1) + "/" + str(len(likeList))
+
+	likeDF_2 = None
+	likeMatrix = likeDF.ix[:, 3:].as_matrix().T
+	pos = likeDF.ix[:, 0]
 
 
 # Estimate covariance matrix
 if not param_LD:
-	print "\n" + "Estimating covariance matrix"
+	print "\n" + "Estimating population allele frequencies"
+	f = alleleEM(likeMatrix, args.EM, args.EM_tole)
+	mask = (f >= 0.05) & (f <= 0.95)
+	print "Number of sites evaluated: " + str(np.sum(mask))
 	
-	# PCAngsd
-	C, f, indf, nEV, mask, expG, X = PCAngsd(likeMatrix, args.e, args.M, args.EM, args.M_tole, args.EM_tole, args.reg)
-
-	# Reduce likelihood matrix
+	# Update arrays
+	f = f[mask]
 	likeMatrix = likeMatrix[:, mask]
 
 	# Reset position info dataframe to evaluated sites
 	pos = pos.ix[mask]
 	pos.reset_index(drop=True, inplace=True)
+
+	# PCAngsd
+	print "\n" + "Estimating covariance matrix"	
+	C, indf, nEV, X, expG = PCAngsd(likeMatrix, args.e, args.M, f, args.M_tole, args.reg)
 
 	# Column names
 	indNames = ["ind" + str(i) for i in range(indf.shape[0])]
@@ -130,33 +159,30 @@ if not param_LD:
 
 	if not param_selection:
 		X = None
+	elif param_selection and args.selection == 1:
 		expG = None
-	elif param_selection & args.selection == 1:
-		expG = None
-	elif param_selection & args.selection == 2:
-		X = np.copy(expG)
-		expG = None
-
+	elif param_selection and args.selection == 2:
+		X = expG
 
 
 # Estimate covariance matrix with LD regression
 if param_LD:
-	print "\n" + "Estimating covariance matrix with LD regression"
-
-	# Set up positions for LD window
-	posDF = pos.str.split("_", expand=True)
-	posDF.ix[:, 1] = posDF.ix[:, 1].astype(int)
-	posDF = posDF.as_matrix()
-
-	# PCAngsd
-	C, f, indf, nEV, mask, X = PCAngsdLD(likeMatrix, posDF, args.LD, args.e, args.M, args.EM, args.M_tole, args.EM_tole, args.reg)
-
-	# Reduce likelihood matrix
+	print "\n" + "Estimating population allele frequencies"
+	f = alleleEM(likeMatrix, args.EM, args.EM_tole)
+	mask = (f >= 0.05) & (f <= 0.95)
+	print "Number of sites evaluated: " + str(np.sum(mask))
+	
+	# Update arrays
+	f = f[mask]
 	likeMatrix = likeMatrix[:, mask]
 
 	# Reset position info dataframe to evaluated sites
 	pos = pos.ix[mask]
 	pos.reset_index(drop=True, inplace=True)
+
+	# PCAngsd
+	print "\n" + "Estimating covariance matrix with LD regression"	
+	C, indf, nEV, X, expG = PCAngsdLD(likeMatrix, args.LD, args.e, args.M, f, args.M_tole, args.reg)
 
 	# Column names
 	indNames = ["ind" + str(i) for i in range(indf.shape[0])]
@@ -177,28 +203,16 @@ if param_LD:
 	print "Saved individual allele frequencies as " + str(args.o) + ".indmafs.gz"
 
 	# Release memory
-	posDF = None
 	covDF = None
 	fDF = None
 	indfDF = None
 
 	if not param_selection:
 		X = None
-
-
-# Genotype calling
-if param_call:
-	print "\n" + "Calling genotypes"
-
-	# Call genotypes and save data frame
-	genotypesDF = pd.DataFrame(callGeno(likeMatrix, indf).T, columns=indNames)
-	genotypesDF[genotypesDF == 3] = "NA"
-	genotypesDF.insert(0, "marker", pos)
-	genotypesDF.to_csv(str(args.o) + ".geno.gz", "\t", index=False, compression="gzip")
-	print "Saved called genotypes as " + str(args.o) + ".geno.gz"
-
-	# Release memory
-	genotypesDF = None
+	elif param_selection and args.selection == 1:
+		expG = None
+	elif param_selection and args.selection == 2:
+		X = expG
 
 
 # Selection scan
@@ -238,6 +252,7 @@ if param_kinship:
 	# Save data frame
 	phiDF = pd.DataFrame(phi)
 	phiDF.to_csv(str(args.o) + ".kinship", sep="\t", header=False, index=False)
+	print "Saved kinship matrix as " + str(args.o) + ".kinship"
 
 	# Release memory
 	phiDF = None
@@ -254,10 +269,12 @@ if param_inbreed and args.inbreed == 1:
 	cNames = ["ind" + str(ind) for ind in range(F.shape[0])]
 	F_DF = pd.DataFrame(F)
 	F_DF.insert(0, "indID", cNames)
-	F_DF.to_csv(str(args.o) + ".inbreed.gz", sep="\t", header=False, index=False, compression="gzip")
+	F_DF.to_csv(str(args.o) + ".inbreed", sep="\t", header=False, index=False)
+	print "Saved inbreeding coefficients as " + str(args.o) + ".inbreed"
 
 	# Release memory
-	F = None
+	if not param_callInbreed:
+		F = None
 	F_DF = None
 
 elif param_inbreed and args.inbreed == 2:
@@ -270,10 +287,12 @@ elif param_inbreed and args.inbreed == 2:
 	cNames = ["ind" + str(ind) for ind in range(F.shape[0])]
 	F_DF = pd.DataFrame(F)
 	F_DF.insert(0, "indID", cNames)
-	F_DF.to_csv(str(args.o) + ".inbreed.gz", sep="\t", header=False, index=False, compression="gzip")
+	F_DF.to_csv(str(args.o) + ".inbreed", sep="\t", header=False, index=False)
+	print "Saved inbreeding coefficients as " + str(args.o) + ".inbreed"
 
 	# Release memory
-	F = None
+	if not param_callInbreed:
+		F = None
 	F_DF = None
 	
 elif param_inbreed and args.inbreed == 3 and param_kinship:
@@ -286,41 +305,65 @@ elif param_inbreed and args.inbreed == 3 and param_kinship:
 	cNames = ["ind" + str(ind) for ind in range(F.shape[0])]
 	F_DF = pd.DataFrame(F)
 	F_DF.insert(0, "indID", cNames)
-	F_DF.to_csv(str(args.o) + ".inbreed.gz", sep="\t", header=False, index=False, compression="gzip")
+	F_DF.to_csv(str(args.o) + ".inbreed", sep="\t", header=False, index=False)
+	print "Saved inbreeding coefficients as " + str(args.o) + ".inbreed"
 
 	# Release memory
-	F = None
+	if not param_callInbreed:
+		F = None
 	phi = None
 	F_DF = None
 
 
 # Per-site inbreeding coefficients
-if param_inbreedSites and args.inbreedSites == 1:
-	print "\n" + "Estimating per-site inbreeding coefficients using maximum likelioohd estimator (EM)"
+if param_inbreedSites:
+	print "\n" + "Estimating per-site inbreeding coefficients using simple estimator (EM) and performing LRT"
 
 	# Estimating per-site inbreeding coefficients
-	F = inbreedSitesEM(likeMatrix, indf, 1, args.inbreed_iter, args.inbreed_tole)
+	Fsites, lrt = inbreedSitesEM(likeMatrix, indf, args.inbreed_iter, args.inbreed_tole)
 
-	# Save data frame
-	F_DF = pd.DataFrame(F, columns=["F"])
-	F_DF.insert(0, "marker", pos)
-	F_DF.to_csv(str(args.o) + ".inbreedSites.gz", sep="\t", index=False, compression="gzip")
+	# Save data frames
+	Fsites_DF = pd.DataFrame(Fsites, columns=["F"])
+	Fsites_DF.insert(0, "marker", pos)
+	Fsites_DF.to_csv(str(args.o) + ".inbreedSites.gz", sep="\t", index=False, compression="gzip")
+	print "Saved per-site inbreeding coefficients as " + str(args.o) + ".inbreedSites.gz"
 
-	# Release memory
-	F = None
-	F_DF = None
-
-elif param_inbreedSites and args.inbreedSites == 2:
-	print "\n" + "Estimating per-site inbreeding coefficients using simple estimator (EM)"
-
-	# Estimating per-site inbreeding coefficients
-	F = inbreedSitesEM(likeMatrix, indf, 2, args.inbreed_iter, args.inbreed_tole)
-
-	# Save data frame
-	F_DF = pd.DataFrame(F, columns=["F"])
-	F_DF.insert(0, "marker", pos)
-	F_DF.to_csv(str(args.o) + ".inbreedSites.gz", sep="\t", index=False, compression="gzip")
+	lrt_DF = pd.DataFrame(lrt, columns=["chi2"])
+	lrt_DF.insert(0, "marker", pos)
+	lrt_DF.to_csv(str(args.o) + ".lrtSites.gz", sep="\t", index=False, compression="gzip")
+	print "Saved likelihood ratio tests as " + str(args.o) + ".lrtSites.gz"
 
 	# Release memory
-	F = None
-	F_DF = None
+	Fsites = None
+	Fsites_DF = None
+	lrt = None
+	lrt_DF = None
+
+
+# Genotype calling
+if param_call:
+	print "\n" + "Calling genotypes with a threshold of " + str(args.geno)
+
+	# Call genotypes and save data frame
+	genotypesDF = pd.DataFrame(callGeno(likeMatrix, indf, args.geno, None).T, columns=indNames)
+	genotypesDF.insert(0, "marker", pos)
+	genotypesDF.to_csv(str(args.o) + ".geno.gz", "\t", index=False, compression="gzip")
+	print "Saved called genotypes as " + str(args.o) + ".geno.gz"
+
+	# Release memory
+	genotypesDF = None
+
+elif args.genoInbreed:
+	print "\n" + "Calling genotypes with a threshold of " + str(args.genoInbreed)
+
+	# Call genotypes and save data frame
+	genotypesDF = pd.DataFrame(callGeno(likeMatrix, indf, args.genoInbreed, F).T, columns=indNames)
+	genotypesDF.insert(0, "marker", pos)
+	genotypesDF.to_csv(str(args.o) + ".genoInbreed.gz", "\t", index=False, compression="gzip")
+	print "Saved called genotypes as " + str(args.o) + ".genoInbreed.gz"
+
+	# Release memory
+	genotypesDF = None
+
+
+print "\n" + "PCAngsd finished. " + str(args)

@@ -16,7 +16,7 @@ import numpy as np
 def alleleEM(likeMatrix, EM=1000, EM_tole=1e-6):
 	mTotal, n = likeMatrix.shape
 	m = mTotal/3
-	f = np.random.rand(n) # Random initialization
+	f = np.random.rand(n) # Uniform initialization
 	f_prev = np.ones(n)*np.inf # Initiate likelihood measure to infinity
 
 	for iteration in range(EM): # EM iterations

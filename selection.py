@@ -1,5 +1,5 @@
 """
-Selection scan using principal components based on Galinsky et al. (2016)
+Selection scan using principal components based on Galinsky et al. (2016) and Luu et al. (2017)
 
 Outputs the chisquare distributed selection statistics for each of the top
 principal components.
@@ -9,7 +9,6 @@ __author__ = "Jonas Meisner"
 
 # Import libraries
 import numpy as np
-import scipy.stats as stats
 from helpFunctions import *
 
 # Selection scan
@@ -29,30 +28,26 @@ def selectionScan(X, C, nEV, model=1):
 			# Weighted SNP is chi-square distributed with df = 1
 			test[eigVec] = (1.0/l[eigVec])*(np.dot(X.T, V[:, eigVec])**2)
 
-			# Genomic inflation factor
-			inflate = np.median(test[eigVec])/stats.chi2.median(df=1)
-			test[eigVec] = test[eigVec]/inflate
-
 
 	elif model==2: # PCAdapt
 		test = np.zeros(X.shape[1])
 
+		V_bias = np.hstack((np.ones((X.shape[0], 1)), V)) # Add bias term
+
 		# Linear regressions
-		B = np.dot(X.T, V)
-		res = X - np.dot(np.dot(V, V.T), X)
+		hatX = np.dot(np.linalg.inv(np.dot(V_bias.T, V_bias)), V_bias.T)
+		B = np.dot(hatX, X)
+		res = X - np.dot(V_bias, np.dot(hatX, X))
 
 		# Z-scores estimation
-		resVar = np.var(res, axis=0) # Variance of residuals
-		Z = B*np.sqrt(1/resVar).reshape(B.shape[0], 1)
-		Zmeans = np.mean(Z, axis=0) # K mean Z-scores
-		Zinvcov = np.linalg.inv(np.cov(Z.T)) # Inverse covariance matrix of Z-scores
+		resStd = np.std(res, axis=0, ddof=1) # Standard deviations of residuals
+		Z = B[1:]/resStd
+		Z = np.nan_to_num(Z) # Set NaNs to 0
+		Zmeans = np.mean(Z, axis=1) # K mean Z-scores
+		Zinvcov = np.linalg.inv(np.cov(Z)) # Inverse covariance matrix of Z-scores
 
 		# Calculate Mahalanobis distances
 		for s in range(X.shape[1]):
-			test[s] = np.dot(np.dot((Z[s, :] - Zmeans), Zinvcov), (Z[s, :] - Zmeans))
-
-		# Genomic inflation factor
-		inflate = np.median(test)/stats.chi2.median(df=nEV)
-		test = test/inflate
+			test[s] = np.sqrt(np.dot(np.dot((Z[:, s] - Zmeans), Zinvcov), (Z[:, s] - Zmeans)))
 
 	return test

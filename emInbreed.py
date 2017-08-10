@@ -25,7 +25,7 @@ def inbreedEM(likeMatrix, f, model=1, EM=200, EM_tole=1e-4):
 	if model == 1: # Maximum likelihood estimator
 		for iteration in range(EM): # EM iterations
 			if f.ndim == 1:
-				# Estimated genotype frequencies given IBD (Z)
+				# Estimated genotype frequencies given IBD state (Z)
 				fMatrix_z0 = np.vstack(((1-f)**2, 2*f*(1-f), f**2))
 				fMatrix_z1 = np.vstack(((1-f), np.zeros(n), f))
 
@@ -33,7 +33,7 @@ def inbreedEM(likeMatrix, f, model=1, EM=200, EM_tole=1e-4):
 
 			for ind in range(m):
 				if f.ndim == 2:
-					# Estimated genotype frequencies given IBD (Z)
+					# Estimated genotype frequencies given IBD state (Z)
 					fMatrix_z0 = np.vstack(((1-f[ind])**2, 2*f[ind]*(1-f[ind]), f[ind]**2))
 					fMatrix_z1 = np.vstack(((1-f[ind]), np.zeros(n), f[ind]))
 
@@ -41,13 +41,17 @@ def inbreedEM(likeMatrix, f, model=1, EM=200, EM_tole=1e-4):
 				wLike[1, :] = np.sum(likeMatrix[(3*ind):(3*ind+3)]*fMatrix_z1, axis=0)*F[ind]
 			
 				# Expectation maximation - Update F
-				zProb = wLike/np.sum(wLike, axis=0) 
+				zProb = wLike/np.sum(wLike, axis=0) # Posterior probabilities
 				F[ind] = np.sum(zProb[1, :])/float(n)
 
 			# Break EM update if converged
-			if rmse(F, F_prev) < EM_tole:
+			updateDiff = rmse(F, F_prev)
+			print "Inbreeding coefficients computed	(" +str(iteration) + ") Diff=" + str(updateDiff)
+			if updateDiff < EM_tole:
 				print "EM (Inbreeding) converged at iteration: " + str(iteration)
 				break
+			elif iteration == (EM-1):
+				print "EM (Inbreeding) was stopped at " + str(iteration) + "with diff: " + str(updateDiff)
 
 			F_prev = np.copy(F)
 
@@ -72,14 +76,18 @@ def inbreedEM(likeMatrix, f, model=1, EM=200, EM_tole=1e-4):
 
 				wLike = likeMatrix[(3*ind):(3*ind+3)]*fMatrix # Weighted likelihood by prior
 
-				# Expectation maximation - Update F
-				gProb = wLike/np.sum(wLike, axis=0)
+				# Expectation maximization - Update F
+				gProb = wLike/np.sum(wLike, axis=0) # Posterior probabilities
 				F[ind] = 1 - np.sum(gProb[1, :])/expH
 
 			# Break EM update if converged
-			if rmse(F, F_prev) < EM_tole:
+			updateDiff = rmse(F, F_prev)
+			print "Inbreeding coefficients computed	(" +str(iteration) + ") Diff=" + str(updateDiff)
+			if updateDiff < EM_tole:
 				print "EM (Inbreeding) converged at iteration: " + str(iteration)
 				break
+			elif iteration == (EM-1):
+				print "EM (Inbreeding) was stopped at " + str(iteration) + " with diff: " + str(updateDiff)
 
 			F_prev = np.copy(F)
 

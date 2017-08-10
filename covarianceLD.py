@@ -2,7 +2,7 @@
 Estimates the covariance matrix for NGS data using the PCAngsd method,
 by linear modelling of expected genotypes based on principal components.
 
-This function includes LD correction.
+This function includes LD regression.
 """
 
 __author__ = "Jonas Meisner"
@@ -16,46 +16,31 @@ import numpy as np
 import pandas as pd
 
 # PCAngsd 
-def PCAngsdLD(likeMatrix, posDF, LD, EVs, M, EM, M_tole=1e-5, EM_tole=1e-6, lrReg=False):
+def PCAngsdLD(likeMatrix, LD, EVs, M, f, M_tole=1e-4, lrReg=False):
 	mTotal, n = likeMatrix.shape # Dimension of likelihood matrix
 	m = mTotal/3 # Number of individuals
 
-	# Estimate average allele frequencies
-	f = alleleEM(likeMatrix, EM, EM_tole)
-	mask = (f >= 0.05) & (f <= 0.95) # Only select variable sites
-	f = f[mask] # Variable sites
-	fMatrix = np.vstack(((1-f)**2, 2*f*(1-f), f**2)) # Estimated genotype frequencies under HWE
-	nSites = np.sum(mask) # Number of variable sites
-	print "Number of sites evaluated: " + str(nSites)
-
-	# Find site-window for LD regression for every site
-	siteDF = pd.DataFrame(posDF[mask, :])
-	siteMatrix = np.zeros(nSites, dtype=int)
-
-	for i in range(siteDF.shape[0]):
-		temp = siteDF[siteDF[0] == siteDF.ix[i, 0]]
-		siteMatrix[i] = (temp[(temp[1] < temp.ix[i, 1]) & (temp[1] >= (temp.ix[i, 1] - LD))]).shape[0]
-
 	# Estimate covariance matrix
-	gVector = np.array([0,1,2]) # Genotype vector
+	fMatrix = np.vstack(((1-f)**2, 2*f*(1-f), f**2)) # Estimated genotype frequencies under HWE
+	gVector = np.array([0,1,2]).reshape(3, 1) # Genotype vector
 	normV = np.sqrt(2*f*(1-f)) # Normalizer for genotype matrix
 	diagC = np.zeros(m) # Diagonal of covariance matrix
-	expG = np.zeros((m, nSites)) # Expected genotype matrix
+	expG = np.zeros((m, n)) # Expected genotype matrix
 
 	for ind in range(m):
-		wLike = likeMatrix[(3*ind):(3*ind+3), mask]*fMatrix # Weighted likelihoods
+		wLike = likeMatrix[(3*ind):(3*ind+3)]*fMatrix # Weighted likelihoods
 		gProp = wLike/np.sum(wLike, axis=0) # Genotype probabilities of individual
-		gProp = np.nan_to_num(gProp) # Set NaNs to 0
-		expG[ind] = np.sum((gProp.T*gVector).T, axis=0) # Expected genotypes
+		expG[ind] = np.sum(gProp*gVector, axis=0) # Expected genotypes
 
 		# Estimate diagonal entries in covariance matrix
-		diagC[ind] = np.sum(np.sum((((gVector*np.ones((nSites, 3))).T - 2*f)*gProp)**2, axis=0)/(normV**2))/nSites
+		diagC[ind] = np.sum(np.sum(((np.ones((3, n))*gVector - 2*f)*gProp)**2, axis=0)/(normV**2))/n
 
-	C = np.dot((expG - 2*f)/normV, ((expG - 2*f)/normV).T)/nSites # Covariance matrix for i != j
+	X = (expG - 2*f)/normV # Standardized genotype matrix
+	C = np.dot(X, X.T)/n # Covariance matrix for i != j
 	np.fill_diagonal(C, diagC) # Entries for i == j
 	print "Covariance matrix computed	(Fumagalli)"
 	
-	prevEG = np.ones((m, nSites))*np.inf # Container for break condition
+	prevEG = np.ones((m, n))*np.inf # Container for break condition
 	nEV = EVs
 	
 	# Iterative covariance estimation
@@ -68,29 +53,40 @@ def PCAngsdLD(likeMatrix, posDF, LD, EVs, M, EM, M_tole=1e-5, EM_tole=1e-6, lrRe
 
 		# Patterson test for number of significant eigenvalues
 		if iteration==1 and EVs==0:
+			mPrime = m-1
+			nPrime = ((mPrime+1)*(np.sum(evSort)**2))/(((mPrime-1)*np.sum(evSort**2))-(np.sum(evSort)**2))
 
-			for ev in range(10): # Loop over maximum 10 eigenvalues
-				mPrime = m-1-ev # Rank of matrix
+			# Normalizing eigenvalues
+			mu = ((np.sqrt(nPrime-1) + np.sqrt(mPrime))**2)/nPrime
+			sigma = np.sqrt(np.sum(evSort))/((mPrime-1)*nPrime)
+			l = (mPrime*evSort)/np.sum(evSort) 
+			x = (l - mu)/sigma
 
-				# Effective number of samples
-				nPrime = ((mPrime+1)*(np.sum(evSort[ev:])**2))/(((mPrime-1)*np.sum(evSort[ev:]**2))-(np.sum(evSort[ev:])**2))
+			# Test TW statistics for significance
+			nEV = np.sum(x > 0.9794)
 
-				# Normalizing largest eigenvalue
+			if nEV > 1:
+				print str(nEV) + " eigenvalues are significant"
+			else:
+				# Testing for additional structure
+				mPrime = m-2
+				nPrime = ((mPrime+1)*(np.sum(evSort[1:])**2))/(((mPrime-1)*np.sum(evSort[1:]**2))-(np.sum(evSort[1:])**2))
+
+				# Normalizing eigenvalues
 				mu = ((np.sqrt(nPrime-1) + np.sqrt(mPrime))**2)/nPrime
-				sigma = ((np.sqrt(nPrime-1)+np.sqrt(mPrime))/nPrime)*(((1.0/np.sqrt(nPrime-1))+(1.0/np.sqrt(mPrime)))**(1.0/3.0))
-				l = (mPrime*evSort[ev])/np.sum(evSort[ev:]) 
+				sigma = np.sqrt(np.sum(evSort[1:]))/((mPrime-1)*nPrime)
+				l = (mPrime*evSort)/np.sum(evSort[1:]) 
 				x = (l - mu)/sigma
-			
+
 				# Test TW statistics for significance
-				if x <= 0.9794:
-					nEV = ev # Number of significant eigenvalues at the 0.05 signficance level
-					print str(ev) + " eigenvalue(s) are significant"
-					break
-				elif ev == 9:
+				addEV = np.sum(x > 0.9794)
+
+				if (nEV + addEV) > 10:
 					nEV = 10
-					print "10 eigenvalue(s) are significant (maximum)"
+					print str(nEV) + " eigenvalues are significant (maximum)"
 				else:
-					nEV = ev+1
+					nEV = nEV + addEV
+					print str(nEV) + " eigenvalue(s) are significant"
 
 			assert (nEV !=0), "0 significant eigenvalues found. Select number of eigenvalues manually!"
 
@@ -115,15 +111,15 @@ def PCAngsdLD(likeMatrix, posDF, LD, EVs, M, EM, M_tole=1e-5, EM_tole=1e-6, lrRe
 			# Genotype frequencies based on individual allele frequencies under HWE 
 			fMatrix = np.vstack(((1-predF[ind])**2, 2*predF[ind]*(1-predF[ind]), predF[ind]**2))
 			
-			wLike = likeMatrix[(3*ind):(3*ind+3), mask]*fMatrix # Weighted likelihoods
+			wLike = likeMatrix[(3*ind):(3*ind+3)]*fMatrix # Weighted likelihoods
 			gProp = wLike/np.sum(wLike, axis=0) # Genotype probabilities of individual
-			gProp = np.nan_to_num(gProp) # Set NaNs to 0
-			expG[ind] = np.sum((gProp.T*gVector).T, axis=0) # Expected genotypes
+			expG[ind] = np.sum(gProp*gVector, axis=0) # Expected genotypes
 
 			# Estimate diagonal entries in covariance matrix
-			diagC[ind] = np.sum(np.sum((((gVector*np.ones((nSites, 3))).T - 2*f)*gProp)**2, axis=0)/(normV**2))/nSites
+			diagC[ind] = np.sum(np.sum(((np.ones((3, n))*gVector - 2*f)*gProp)**2, axis=0)/(normV**2))/n
 
-		C = np.dot((expG - 2*f)/normV, ((expG - 2*f)/normV).T)/nSites # Covariance matrix for i != j
+		X = (expG - 2*f)/normV # Standardized genotype matrix
+		C = np.dot(X, X.T)/n # Covariance matrix for i != j
 		np.fill_diagonal(C, diagC) # Entries for i == j
 
 		# Break iterative covariance update if converged
@@ -140,21 +136,35 @@ def PCAngsdLD(likeMatrix, posDF, LD, EVs, M, EM, M_tole=1e-5, EM_tole=1e-6, lrRe
 	print "Performing LD regression"
 
 	# Setting up for LD
-	X = (expG - 2*f)/normV
-	Wr = np.zeros((m, nSites))
+	Wr = np.zeros((m, n))
 	diagWr = np.zeros(m)
 
 	# Compute the residual genotype matrix R
-	for site in range(nSites):
+	for site in range(n):
 		# Setting up sites to use
-		if siteMatrix[site] == 0:
-			continue
+		if site == 0:
+			s1 = np.array([], dtype=int) # Preceding sites
+			s2 = np.arange(site+1, site+1+LD) # Following sites
+			sArray = np.append(s1, s2)
+		elif site < LD:
+			s1 = np.arange(site) # Preceding sites
+			s2 = np.arange(site+1, site+1+LD) # Following sites
+			sArray = np.append(s1, s2)
+		elif site == n:
+			s1 = np.arange(site-LD, site) # Preceding sites
+			s2 = np.array([], dtype=int) # Following sites
+			sArray = np.append(s1, s2)
+		elif site + LD >= n:
+			s1 = np.arange(site-LD, site) # Preceding sites
+			s2 = np.arange(site+1, n) # Following sites
+			sArray = np.append(s1, s2)
 		else:
-			sArray = np.arange(site-siteMatrix[site], site) # Adjacent sites
+			s1 = np.arange(site-LD, site) # Preceding sites
+			s2 = np.arange(site+1, site+1+LD) # Following sites
+			sArray = np.append(s1, s2)
 
-		X_bias = np.hstack((np.ones((m, 1)), X[:, sArray]))
-		B = linRegLD(X_bias, X[:, site], False)
-		Wr[:, site] =  np.dot(X_bias, B)
+		B = linRegLD(X[:, sArray], X[:, site], True)
+		Wr[:, site] =  np.dot(X[:, sArray], B)
 
 	for ind in range(m):
 		diagWr[ind] = np.dot(Wr[ind].T, Wr[ind])
@@ -164,4 +174,4 @@ def PCAngsdLD(likeMatrix, posDF, LD, EVs, M, EM, M_tole=1e-5, EM_tole=1e-6, lrRe
 	np.fill_diagonal(C, (diagC - diagWr)) # Entries for i == j
 	C = C/np.sum(np.var(R, axis=0)) # Normalize covariance matrix
 
-	return C, f, predF, nEV, mask, R
+	return C, predF, nEV, X, expG

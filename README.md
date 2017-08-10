@@ -1,12 +1,18 @@
-# pcangsd
+# PCAngsd
 
-**Version 0.1**
+**Version 0.2**
 
-Population genetic analyses performed using principal components for next-generation sequencing data. Using the principal components estimated from the covariance matrix to make a linear model of the genotype dosages to estimate the individual allele frequencies of each individual in all sites. The individual allele frequencies can then be used in a bayesian approach to estimate the posterior genotypes as previously done with population allele frequencies in order to produce a new covariance matrix and its corresponding principal components, which once again can be used to estimate a new set of updated individual allele frequencies. PCAngsd performs this iterative update until convergence.
+Framework for analyzing low depth next-generation sequencing data in heterogeneous population using principal component analysis. Population structure is inferred by PCA and the principal components are used to estimate individual allele frequencies using a linear regression model. The individual allele frequencies are then used in an Empirical Bayes approach to estimate the posterior genotype probabilities in order to estimate a new covariance matrix and its corresponding principal components. PCAngsd performs this iterative update until the individual allele frequencies have converged.
 
-The estimated individual allele frequencies and principal components can then be used as prior knowledge in various population genetic analyses where some are already implemented in PCAngsd (Covariance matrix, Inbreeding, Selection scan, Kinship).
+The estimated individual allele frequencies and principal components can be used as prior knowledge in other probabilistic methods based on an Empirical Bayes approach. PCAngsd can perform the following analyses: 
 
-The entire program is written Python 2.7 using two external popular python packages; Numpy for fast numerical computations and Pandas for easy data frame manipulations.
+* Covariance matrix
+* Genotype calling
+* Inbreeding coefficients (both per-individual and per-site)
+* Genome selection scan
+* Kinship matrix
+
+The entire framework is written Python 2.7 using two external popular python packages; Numpy for fast optimized numerical computations and Pandas for easy data frame manipulations.
 
 ## Get PCAngsd
 ```
@@ -15,10 +21,10 @@ cd pcangsd/
 ```
 
 ## Usage
-A full wiki of how to use all the features of PCAngsd will soon be made available on [popgen.dk](http://www.popgen.dk/software/index.php/PCAngsd). 
+A full wiki of how to use all the features of PCAngsd is available at [popgen.dk](http://www.popgen.dk/software/index.php/PCAngsd). 
 
 PCAngsd is used by running the main caller file pcangsd.py. To see all available options use the following command:
-```
+```python
 python pcangsd.py -h
 ```
 
