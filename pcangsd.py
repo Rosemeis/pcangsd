@@ -60,7 +60,7 @@ parser.add_argument("-kinship", action="store_true",
 parser.add_argument("-o", metavar="FILENAME", action="store", help="Output file name", default="pcangsd")
 args = parser.parse_args()
 
-print "Running PCAngsd " str(args.version)
+print "Running PCAngsd " + str(args.version)
 assert (args.beagle != None or args.beaglelist != None), "Missing Beagle file(s)!"
 
 # Setting up workflow parameters
