@@ -278,7 +278,7 @@ if param_inbreed and args.inbreed == 1:
 	print "Saved inbreeding coefficients as " + str(args.o) + ".inbreed"
 
 	# Release memory
-	if not param_callInbreed:
+	if not args.genoInbreed:
 		F = None
 	F_DF = None
 
@@ -296,7 +296,7 @@ elif param_inbreed and args.inbreed == 2:
 	print "Saved inbreeding coefficients as " + str(args.o) + ".inbreed"
 
 	# Release memory
-	if not param_callInbreed:
+	if not args.genoInbreed:
 		F = None
 	F_DF = None
 	
@@ -314,7 +314,7 @@ elif param_inbreed and args.inbreed == 3 and param_kinship:
 	print "Saved inbreeding coefficients as " + str(args.o) + ".inbreed"
 
 	# Release memory
-	if not param_callInbreed:
+	if not args.genoInbreed:
 		F = None
 	phi = None
 	F_DF = None
