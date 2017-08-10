@@ -1,5 +1,5 @@
 """
-Kinship estimator using genotype likelihoods based on Conomos et al. (2016).
+Kinship estimator using genotype likelihoods based on PC-Relate.
 """
 
 __author__ = "Jonas Meisner"
