@@ -91,8 +91,8 @@ if args.kinship:
 if args.geno != None:
 	param_call = True
 
-assert (args.genoInbreed and param_inbreed), "Inbreeding coefficients must have been estimated in order to use -genoInbreed! Use -inbreed [int]."
-
+if args.genoInbreed:
+	assert param_inbreed, "Inbreeding coefficients must have been estimated in order to use -genoInbreed! Use -inbreed [int]."
 
 
 # Parse Beagle file(s)
