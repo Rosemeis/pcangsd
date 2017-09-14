@@ -11,9 +11,10 @@ from emMAF import *
 
 # Import libraries
 import numpy as np
+import TracyWidom as TW
 
-# PCAngsd 
-def PCAngsd(likeMatrix, EVs, M, f, M_tole=1e-4, lrReg=False):
+# PCAngsd
+def PCAngsd(likeMatrix, EVs, M, f, M_tole=1e-4, regLR=0, scaledLR=False, LD=0):
 	mTotal, n = likeMatrix.shape # Dimension of likelihood matrix
 	m = mTotal/3 # Number of individuals
 
@@ -33,9 +34,39 @@ def PCAngsd(likeMatrix, EVs, M, f, M_tole=1e-4, lrReg=False):
 		diagC[ind] = np.sum(np.sum(((np.ones((3, n))*gVector - 2*f)*gProp)**2, axis=0)/(normV**2))/n
 
 	X = (expG - 2*f)/normV # Standardized genotype matrix
-	C = np.dot(X, X.T)/n # Covariance matrix for i != j
-	np.fill_diagonal(C, diagC) # Entries for i == j
-	print "Covariance matrix computed	(Fumagalli)"
+
+	# LD regression
+	if LD > 0:
+		print "Performing LD regression"
+		Wr = np.zeros((m, n))
+		diagWr = np.zeros(m)
+
+		# Compute the residual genotype matrix
+		for s in range(1, n):
+			# Setting up sites to use
+			if s < LD:
+				sArray = np.arange(s) # Preceding sites
+			else:
+				sArray = np.arange(s-LD, s) # Preceding sites
+
+			X_LD = np.hstack((np.ones((m, 1)), X[:, sArray]))
+			y_LD = X[:, s]
+			Tau_LD = np.eye(X_LD.shape[1])*0.01
+			hat_LD = np.dot(np.linalg.inv(np.dot(X_LD.T, X_LD) + Tau_LD), X_LD.T)
+			Wr[:, s] =  np.dot(X_LD, np.dot(hat_LD, y_LD))
+
+		for ind in range(m):
+			diagWr[ind] = np.dot(Wr[ind].T, Wr[ind])
+
+		C = np.dot(X - Wr, (X - Wr).T) # Covariance matrix for i != j
+		np.fill_diagonal(C, (diagC - diagWr)) # Entries for i == j
+		C = C/np.sum(np.var(X - Wr, axis=0)) # Normalize covariance matrix
+		print "Covariance matrix computed	(0 - LD)"
+
+	else:
+		C = np.dot(X, X.T)/n # Covariance matrix for i != j
+		np.fill_diagonal(C, diagC) # Entries for i == j
+		print "Covariance matrix computed	(Fumagalli)"
 	
 	prevF = np.ones((m, n))*np.inf # Container for break condition
 	nEV = EVs
@@ -44,48 +75,54 @@ def PCAngsd(likeMatrix, EVs, M, f, M_tole=1e-4, lrReg=False):
 	for iteration in range(1, M+1):
 		
 		# Eigen-decomposition
-		eigVals, eigVecs = np.linalg.eig(C)
+		eigVals, eigVecs = np.linalg.eig(C*n)
 		sort = np.argsort(eigVals)[::-1] # Sorting vector
 		evSort = eigVals[sort] # Sorted eigenvalues
 
 		# Patterson test for number of significant eigenvalues
-		if iteration==1 and EVs==0:
-			mPrime = m-1
-			nPrime = ((mPrime+1)*(np.sum(evSort)**2))/(((mPrime-1)*np.sum(evSort**2))-(np.sum(evSort)**2))
+		if (iteration == 1) & (EVs == 0):
+			Vscale = np.zeros(10)
+			#mPrime = m-1
+			#nPrime = ((mPrime+1)*(np.sum(evSort[:mPrime])**2))/(((mPrime-1)*np.sum(evSort[:mPrime]**2))-(np.sum(evSort[:mPrime])**2))
+			nPrime = n
+			mPrime = m
 
-			# Normalizing eigenvalues
-			mu = ((np.sqrt(nPrime-1) + np.sqrt(mPrime))**2)/nPrime
-			sigma = np.sqrt(np.sum(evSort))/((mPrime-1)*nPrime)
-			l = (mPrime*evSort)/np.sum(evSort) 
-			x = (l - mu)/sigma
+			# Normalizing eigenvalues - Estimating Wilshart parameters
+			mu = ((np.sqrt(nPrime-1) + np.sqrt(mPrime))**2)
+			sigma = (np.sqrt(nPrime-1) + np.sqrt(mPrime))*(((1/np.sqrt(nPrime-1)) + (1/np.sqrt(mPrime)))**(1/3.0))
+			#l = (mPrime*evSort[0])/np.sum(evSort[:mPrime]) # Scale eigenvalues
+			x = (evSort[0] - mu)/sigma # Normalized eigenvalues (test statistic)
+			Vscale[0] = x
 
 			# Test TW statistics for significance
-			nEV = np.sum(x > 0.9794)
+			if x > 2.0236:
+				nEV = 1
+			assert (nEV !=0), "0 significant eigenvalues found. Select number of eigenvalues manually!"
 
-			if nEV > 1:
-				print str(nEV) + " eigenvalues are significant"
-			else:
-				# Testing for additional structure
-				mPrime = m-2
-				nPrime = ((mPrime+1)*(np.sum(evSort[1:])**2))/(((mPrime-1)*np.sum(evSort[1:]**2))-(np.sum(evSort[1:])**2))
-
-				# Normalizing eigenvalues
-				mu = ((np.sqrt(nPrime-1) + np.sqrt(mPrime))**2)/nPrime
-				sigma = np.sqrt(np.sum(evSort[1:]))/((mPrime-1)*nPrime)
-				l = (mPrime*evSort)/np.sum(evSort[1:]) 
-				x = (l - mu)/sigma
+			while True:
+				#mPrime = m-1-nEV
+				#nPrime = ((mPrime+1)*(np.sum(evSort[nEV:mPrime])**2))/(((mPrime-1)*np.sum(evSort[nEV:mPrime]**2))-(np.sum(evSort[nEV:mPrime])**2))
+				nPrime = n
+				mPrime = m-nEV
+				
+				# Normalizing eigenvalues - Estimating Wilshart parameters
+				mu = ((np.sqrt(nPrime-1) + np.sqrt(mPrime))**2)
+				sigma = (np.sqrt(nPrime-1) + np.sqrt(mPrime))*(((1/np.sqrt(nPrime-1)) + (1/np.sqrt(mPrime)))**(1/3.0))
+				#l = (mPrime*evSort[nEV])/np.sum(evSort[nEV:mPrime])
+				x = (evSort[nEV] - mu)/sigma
+				Vscale[nEV] = x
 
 				# Test TW statistics for significance
-				addEV = np.sum(x > 0.9794)
-
-				if (nEV + addEV) > 10:
-					nEV = 10
-					print str(nEV) + " eigenvalues are significant (maximum)"
+				if x > 2.0236:
+					nEV += 1
+					if nEV == 10:
+					 	print str(nEV) + " eigenvalue(s) are significant"
+					 	Vscale = Vscale/Vscale[0]
+					 	break
 				else:
-					nEV = nEV + addEV
 					print str(nEV) + " eigenvalue(s) are significant"
-
-			assert (nEV !=0), "0 significant eigenvalues found. Select number of eigenvalues manually!"
+					Vscale = Vscale/Vscale[0]
+					break
 
 
 		V = eigVecs[:, sort[:nEV]] # Sorted eigenvectors regarding eigenvalue size
@@ -93,19 +130,22 @@ def PCAngsd(likeMatrix, EVs, M, f, M_tole=1e-4, lrReg=False):
 		# Multiple linear regression
 		V_bias = np.hstack((np.ones((m, 1)), V)) # Add bias term
 
-		if lrReg:
-			Tau = np.eye(V_bias.shape[1])*0.1
-			hatX = np.dot(np.linalg.inv(np.dot(V_bias.T, V_bias) + np.dot(Tau.T, Tau)), V_bias.T)
+		if scaledLR: # Scaled regression
+			V_bias = V_bias*np.append(np.array([1]), Vscale)
+
+		if regLR > 0: # Ridge regression
+			Tau = np.eye(V_bias.shape[1])*regLR
+			hatX = np.dot(np.linalg.inv(np.dot(V_bias.T, V_bias) + Tau), V_bias.T)
 		else:
 			hatX = np.dot(np.linalg.inv(np.dot(V_bias.T, V_bias)), V_bias.T)
-
+		
 		predEG = np.dot(V_bias, np.dot(hatX, expG))
 		predF = predEG/2 # Estimated allele frequencies from expected genotypes
 		predF = predF.clip(min=0.00001, max=1-0.00001)
 		
 		# Estimate covariance matrix
 		for ind in range(m):
-			# Genotype frequencies based on individual allele frequencies under HWE 
+			# Genotype frequencies based on individual allele frequencies under HWE
 			fMatrix = np.vstack(((1-predF[ind])**2, 2*predF[ind]*(1-predF[ind]), predF[ind]**2))
 			
 			wLike = likeMatrix[(3*ind):(3*ind+3)]*fMatrix # Weighted likelihoods
@@ -116,12 +156,41 @@ def PCAngsd(likeMatrix, EVs, M, f, M_tole=1e-4, lrReg=False):
 			diagC[ind] = np.sum(np.sum(((np.ones((3, n))*gVector - 2*f)*gProp)**2, axis=0)/(normV**2))/n
 
 		X = (expG - 2*f)/normV # Standardized genotype matrix
-		C = np.dot(X, X.T)/n # Covariance matrix for i != j
-		np.fill_diagonal(C, diagC) # Entries for i == j
+
+		# LD regression
+		if LD > 0:
+			print "Performing LD regression"
+			Wr = np.zeros((m, n))
+			diagWr = np.zeros(m)
+
+			# Compute the residual genotype matrix
+			for s in range(1, n):
+				# Setting up sites to use
+				if s < LD:
+					sArray = np.arange(s) # Preceding sites
+				else:
+					sArray = np.arange(s-LD, s) # Preceding sites
+
+				X_LD = X[:, sArray]
+				y_LD = X[:, s]
+				Tau_LD = np.eye(X_LD.shape[1])*0.01
+				hat_LD = np.dot(np.linalg.inv(np.dot(X_LD.T, X_LD) + Tau_LD), X_LD.T)
+				Wr[:, s] =  np.dot(X_LD, np.dot(hat_LD, y_LD))
+
+			for ind in range(m):
+				diagWr[ind] = np.dot(Wr[ind].T, Wr[ind])
+
+			C = np.dot(X - Wr, (X - Wr).T) # Covariance matrix for i != j
+			np.fill_diagonal(C, (diagC - diagWr)) # Entries for i == j
+			C = C/np.sum(np.var(X - Wr, axis=0)) # Normalize covariance matrix
+
+		else:
+			C = np.dot(X, X.T)/n # Covariance matrix for i != j
+			np.fill_diagonal(C, diagC) # Entries for i == j
 
 		# Break iterative covariance update if converged
 		updateDiff = rmse(predF, prevF)
-		print "Covariance matrix computed	(" +str(iteration) + ") Diff=" + str(updateDiff)
+		print "Covariance matrix computed	(" + str(iteration) + ") Diff=" + str(updateDiff)
 		if updateDiff <= M_tole:
 			print "PCAngsd converged at iteration: " + str(iteration)
 			break

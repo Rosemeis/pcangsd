@@ -1,5 +1,7 @@
 """
-Call genotypes from using estimated individual allele frequencies as prior.
+Call genotypes from posterior genotype probabilities using estimated individual allele frequencies as prior.
+
+Can be performed with and without taking inbreeding into account.
 """
 
 __author__ = "Jonas Meisner"
@@ -13,7 +15,7 @@ def callGeno(likeMatrix, f, delta, F=None):
 	m = mTotal/3 # Number of individuals
 	G = np.zeros((m, n))
 
-	# Estimate posteior probabilities
+	# Call genotypes with highest posterior probabilities
 	for ind in range(m):
 		if type(F) != type(None):
 			# Genotype frequencies based on individual allele frequencies and inbreeding (HWE extended)
@@ -22,7 +24,7 @@ def callGeno(likeMatrix, f, delta, F=None):
 			# Genotype frequencies based on individual allele frequencies under HWE 
 			fMatrix = np.vstack(((1-f[ind])**2, 2*f[ind]*(1-f[ind]), f[ind]**2))
 		wLike = likeMatrix[(3*ind):(3*ind+3)]*fMatrix # Weighted likelihoods
-		gProp = wLike/np.sum(wLike, axis=0) # Genotype probabilities of individual
+		gProp = wLike/np.sum(wLike, axis=0) # Posterior genotype probabilities of individual
 
 		# Find genotypes with highest probability
 		genos = np.argmax(gProp, axis=0)

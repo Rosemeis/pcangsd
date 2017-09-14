@@ -9,6 +9,7 @@ __author__ = "Jonas Meisner"
 
 # Import libraries
 import numpy as np
+import scipy.stats as stats
 from helpFunctions import *
 
 # Selection scan
@@ -25,23 +26,21 @@ def selectionScan(X, C, nEV, model=1):
 
 		# Compute p-values for each PC in each site
 		for eigVec in range(nEV):
-			# Weighted SNP is chi-square distributed with df = 1
+			# Weighted SNPs are chi-square distributed with df = 1
 			test[eigVec] = (1.0/l[eigVec])*(np.dot(X.T, V[:, eigVec])**2)
 
 
 	elif model==2: # PCAdapt
 		test = np.zeros(X.shape[1])
 
-		V_bias = np.hstack((np.ones((X.shape[0], 1)), V)) # Add bias term
-
 		# Linear regressions
-		hatX = np.dot(np.linalg.inv(np.dot(V_bias.T, V_bias)), V_bias.T)
+		hatX = np.dot(np.linalg.inv(np.dot(V.T, V)), V.T)
 		B = np.dot(hatX, X)
-		res = X - np.dot(V_bias, np.dot(hatX, X))
+		res = X - np.dot(V, np.dot(hatX, X))
 
 		# Z-scores estimation
 		resStd = np.std(res, axis=0, ddof=1) # Standard deviations of residuals
-		Z = B[1:]/resStd
+		Z = B/resStd
 		Z = np.nan_to_num(Z) # Set NaNs to 0
 		Zmeans = np.mean(Z, axis=1) # K mean Z-scores
 		Zinvcov = np.linalg.inv(np.cov(Z)) # Inverse covariance matrix of Z-scores
@@ -49,5 +48,9 @@ def selectionScan(X, C, nEV, model=1):
 		# Calculate Mahalanobis distances
 		for s in range(X.shape[1]):
 			test[s] = np.sqrt(np.dot(np.dot((Z[:, s] - Zmeans), Zinvcov), (Z[:, s] - Zmeans)))
+
+		gi = np.median(test)/stats.chi2.median(df=nEV)
+		print "Genomic inflation factor: " + str(gi)
+		test = test/gi
 
 	return test

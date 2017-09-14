@@ -1,5 +1,5 @@
 """
-EM algorithm to estimate the per-site sample allele frequencies for NGS data using genotype likelihoods.
+EM algorithm to estimate the per-site population allele frequencies for NGS data using genotype likelihoods.
 Maximum likelihood estimator.
 """
 

@@ -1,6 +1,6 @@
 """
 EM algorithm to estimate the per-site inbreeding coefficients for NGS data using genotype likelihoods
-and pre-computed allele frequencies (both sample average or individual).
+and pre-computed allele frequencies (both population or individual).
 
 Simple estimator of the per-site inbreeding coefficients. A likelihood ratio test is also performed for each site.
 """

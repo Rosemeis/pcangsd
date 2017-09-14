@@ -1,14 +1,15 @@
 # PCAngsd
 
-**Version 0.2**
+**Version 0.3**
 
-Framework for analyzing low depth next-generation sequencing data in heterogeneous populations using principal component analysis (PCA). Population structure is inferred by PCA and the principal components are used to estimate individual allele frequencies using a linear regression model. The individual allele frequencies are then used in an Empirical Bayes approach to estimate the posterior genotype probabilities in order to estimate a new covariance matrix and its corresponding principal components. PCAngsd performs this iterative update until the individual allele frequencies have converged. 
+Framework for analyzing low depth next-generation sequencing (NGS) data in heterogeneous populations using principal component analysis (PCA). Population structure is inferred by PCA and the principal components are used to estimate individual allele frequencies using a linear regression model. The individual allele frequencies are then used in an Empirical Bayes approach to estimate the posterior genotype probabilities in order to estimate a new covariance matrix and its corresponding principal components. PCAngsd performs this iterative update until the individual allele frequencies have converged. 
 
 The estimated individual allele frequencies and principal components can be used as prior knowledge in other probabilistic methods based on an Empirical Bayes approach. PCAngsd can perform the following analyses: 
 
 * Covariance matrix
 * Genotype calling
 * Inbreeding coefficients (both per-individual and per-site)
+* HWE test
 * Genome selection scan
 * Kinship matrix
 
@@ -28,4 +29,4 @@ PCAngsd is used by running the main caller file pcangsd.py. To see all available
 python pcangsd.py -h
 ```
 
-The only input PCAngsd needs and accepts is the estimated genotype likelihoods in BEAGLE format. These can be estimated using [ANGSD](https://github.com/ANGSD/angsd).
+The only input PCAngsd needs and accepts is the estimated genotype likelihoods in Beagle format. These can be estimated using [ANGSD](https://github.com/ANGSD/angsd).
