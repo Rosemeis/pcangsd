@@ -11,7 +11,6 @@ from emMAF import *
 
 # Import libraries
 import numpy as np
-import TracyWidom as TW
 
 # PCAngsd
 def PCAngsd(likeMatrix, EVs, M, f, M_tole=1e-4, regLR=0, scaledLR=False, LD=0):
