@@ -16,7 +16,7 @@ def kinshipConomos(likeMatrix, f):
 	dem = np.zeros((m, n)) # Container for denominator in estimation
 	gVector = np.array([0,1,2]) # Genotype vector
 
-	for ind in range(m):
+	for ind in xrange(m):
 		# Genotype frequencies based on individual allele frequencies under HWE 
 		fMatrix = np.vstack(((1-f[ind])**2, 2*f[ind]*(1-f[ind]), f[ind]**2))
 			

@@ -17,25 +17,24 @@ import numpy as np
 
 # EM algorithm for estimation of inbreeding coefficients
 def inbreedEM(likeMatrix, f, model=1, EM=200, EM_tole=1e-4):
-	mTotal, n = likeMatrix.shape # Dimension of likelihood matrix
-	m = mTotal/3 # Number of individuals
-	F = np.random.rand(m) # Random intialization of inbreeding coefficients
-	F_prev = np.ones(m)*np.inf # Initiate likelihood measure to infinity
+	m, n = likeMatrix.shape # Dimension of genotype likelihood matrix
+	m /= 3 # Number of individuals
+	F = np.random.rand(m).astype(np.float32) # Random intialization of inbreeding coefficients
 
 	if model == 1: # Maximum likelihood estimator
-		for iteration in range(EM): # EM iterations
+		for iteration in xrange(1, EM+1): # EM iterations
 			if f.ndim == 1:
 				# Estimated genotype frequencies given IBD state (Z)
 				fMatrix_z0 = np.vstack(((1-f)**2, 2*f*(1-f), f**2))
-				fMatrix_z1 = np.vstack(((1-f), np.zeros(n), f))
+				fMatrix_z1 = np.vstack(((1-f), np.zeros(n, dtype=np.float32), f))
 
-			wLike = np.zeros((2,n)) # Weighted likelihood by prior
+			wLike = np.empty((2,n), dtype=np.float32) # Weighted likelihood by prior
 
-			for ind in range(m):
+			for ind in xrange(m):
 				if f.ndim == 2:
 					# Estimated genotype frequencies given IBD state (Z)
 					fMatrix_z0 = np.vstack(((1-f[ind])**2, 2*f[ind]*(1-f[ind]), f[ind]**2))
-					fMatrix_z1 = np.vstack(((1-f[ind]), np.zeros(n), f[ind]))
+					fMatrix_z1 = np.vstack(((1-f[ind]), np.zeros(n, dtype=np.float32), f[ind]))
 
 				wLike[0, :] = np.sum(likeMatrix[(3*ind):(3*ind+3)]*fMatrix_z0, axis=0)*(1-F[ind])
 				wLike[1, :] = np.sum(likeMatrix[(3*ind):(3*ind+3)]*fMatrix_z1, axis=0)*F[ind]
@@ -46,23 +45,20 @@ def inbreedEM(likeMatrix, f, model=1, EM=200, EM_tole=1e-4):
 
 			# Break EM update if converged
 			updateDiff = rmse(F, F_prev)
-			print "Inbreeding coefficients computed	(" +str(iteration) + ") Diff=" + str(updateDiff)
+			print "Inbreeding coefficients computed	(" +str(iteration) + ") RMSE=" + str(updateDiff)
 			if updateDiff < EM_tole:
 				print "EM (Inbreeding) converged at iteration: " + str(iteration)
 				break
-			elif iteration == (EM-1):
-				print "EM (Inbreeding) was stopped at " + str(iteration) + "with diff: " + str(updateDiff)
 
 			F_prev = np.copy(F)
 
-
 	elif model == 2: # Secondary model - Simple estimator (Vieira-model)
-		for iteration in range(EM): # EM iterations
+		for iteration in xrange(EM): # EM iterations
 			if f.ndim == 1:
 				# Expected number of heterozygotes
 				expH = np.sum(2*f*(1-f))
 
-			for ind in range(m):
+			for ind in xrange(m):
 				if f.ndim == 1:
 					# Estimated genotype frequencies given F
 					fMatrix = np.vstack(((1-f)**2 + (1-f)*f*F[ind], 2*(1-f)*f*(1-F[ind]), f**2 + (1-f)*f*F[ind]))

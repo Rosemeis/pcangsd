@@ -1,199 +1,272 @@
 """
 Estimates the covariance matrix for NGS data using the PCAngsd method,
-by linear modelling of expected genotypes based on principal components.
+by estimating individual allele frequencies based on PCA.
 """
 
 __author__ = "Jonas Meisner"
 
-# Import functions
-from helpFunctions import *
-from emMAF import *
-
 # Import libraries
 import numpy as np
+from numba import jit
+from sklearn.utils.extmath import randomized_svd
+import threading
+from helpFunctions import *
 
-# PCAngsd
-def PCAngsd(likeMatrix, EVs, M, f, M_tole=1e-4, regLR=0, scaledLR=False, LD=0):
-	mTotal, n = likeMatrix.shape # Dimension of likelihood matrix
-	m = mTotal/3 # Number of individuals
-
-	# Estimate covariance matrix
-	fMatrix = np.vstack(((1-f)**2, 2*f*(1-f), f**2)) # Estimated genotype frequencies under HWE
-	gVector = np.array([0,1,2]).reshape(3, 1) # Genotype vector
-	normV = np.sqrt(2*f*(1-f)) # Normalizer for genotype matrix
-	diagC = np.zeros(m) # Diagonal of covariance matrix
-	expG = np.zeros((m, n)) # Expected genotype matrix
-
-	for ind in range(m):
-		wLike = likeMatrix[(3*ind):(3*ind+3)]*fMatrix # Weighted likelihoods
-		gProp = wLike/np.sum(wLike, axis=0) # Genotype probabilities of individual
-		expG[ind] = np.sum(gProp*gVector, axis=0) # Expected genotypes
-
-		# Estimate diagonal entries in covariance matrix
-		diagC[ind] = np.sum(np.sum(((np.ones((3, n))*gVector - 2*f)*gProp)**2, axis=0)/(normV**2))/n
-
-	X = (expG - 2*f)/normV # Standardized genotype matrix
-
-	# LD regression
-	if LD > 0:
-		print "Performing LD regression"
-		Wr = np.zeros((m, n))
-		diagWr = np.zeros(m)
-
-		# Compute the residual genotype matrix
-		for s in range(1, n):
-			# Setting up sites to use
-			if s < LD:
-				sArray = np.arange(s) # Preceding sites
-			else:
-				sArray = np.arange(s-LD, s) # Preceding sites
-
-			X_LD = np.hstack((np.ones((m, 1)), X[:, sArray]))
-			y_LD = X[:, s]
-			Tau_LD = np.eye(X_LD.shape[1])*0.01
-			hat_LD = np.dot(np.linalg.inv(np.dot(X_LD.T, X_LD) + Tau_LD), X_LD.T)
-			Wr[:, s] =  np.dot(X_LD, np.dot(hat_LD, y_LD))
-
-		for ind in range(m):
-			diagWr[ind] = np.dot(Wr[ind].T, Wr[ind])
-
-		C = np.dot(X - Wr, (X - Wr).T) # Covariance matrix for i != j
-		np.fill_diagonal(C, (diagC - diagWr)) # Entries for i == j
-		C = C/np.sum(np.var(X - Wr, axis=0)) # Normalize covariance matrix
-		print "Covariance matrix computed	(0 - LD)"
-
-	else:
-		C = np.dot(X, X.T)/n # Covariance matrix for i != j
-		np.fill_diagonal(C, diagC) # Entries for i == j
-		print "Covariance matrix computed	(Fumagalli)"
+##### Functions #####
+# Update posterior expectations of the genotypes (Fumagalli)
+@jit("void(f4[:, :], f4[:], i8, i8, f4[:, :])", nopython=True, nogil=True, cache=True)
+def updateFumagalli(likeMatrix, f, S, N, expG):
+	m, n = likeMatrix.shape # Dimension of likelihood matrix
+	m /= 3 # Number of individuals
 	
-	prevF = np.ones((m, n))*np.inf # Container for break condition
-	nEV = EVs
+	for ind in xrange(S, min(S+N, m)):
+		# Estimate posterior probabilities
+		probMatrix = np.empty((3, n), dtype=np.float32)
+		for s in xrange(n):
+			probMatrix[0, s] = likeMatrix[3*ind, s]*((1 - f[s])*(1 - f[s]))
+			probMatrix[1, s] = likeMatrix[3*ind+1, s]*(2*f[s]*(1 - f[s]))
+			probMatrix[2, s] = likeMatrix[3*ind+2, s]*(f[s]*f[s])
+		probMatrix /= np.sum(probMatrix, axis=0)
+
+		# Estimate genotype dosages
+		for s in xrange(n):
+			expG[ind, s] = 0
+			for g in xrange(3):
+				expG[ind, s] += probMatrix[g, s]*g
+
+# Estimate posterior expecations of the genotypes and covariance matrix diagonal (Fumagalli)
+@jit("void(f4[:, :], f4[:], i8, i8, f4[:, :], f4[:])", nopython=True, nogil=True, cache=True)
+def covFumagalli(likeMatrix, f, S, N, expG, diagC):
+	m, n = likeMatrix.shape # Dimension of likelihood matrix
+	m /= 3 # Number of individuals
+	
+	# Loop over individuals
+	for ind in xrange(S, min(S+N, m)):
+		# Estimate posterior probabilities
+		probMatrix = np.empty((3, n), dtype=np.float32)
+		for s in xrange(n):
+			probMatrix[0, s] = likeMatrix[3*ind, s]*((1 - f[s])*(1 - f[s]))
+			probMatrix[1, s] = likeMatrix[3*ind+1, s]*(2*f[s]*(1 - f[s]))
+			probMatrix[2, s] = likeMatrix[3*ind+2, s]*(f[s]*f[s])
+		probMatrix /= np.sum(probMatrix, axis=0)
+
+		# Estimate genotype dosages and diagonal of GRM
+		diagC[ind] = 0
+		for s in xrange(n):
+			expG[ind, s] = 0
+			temp = 0
+			for g in xrange(3):
+				expG[ind, s] += probMatrix[g, s]*g
+				temp += (g - 2*f[s])*(g - 2*f[s])*probMatrix[g, s]
+			diagC[ind] += temp/(2*f[s]*(1 - f[s]))
+		diagC[ind] /= n
+
+# Update posterior expectations of the genotypes (PCAngsd)
+@jit("void(f4[:, :], f4[:, :], i8, i8, f4[:, :])", nopython=True, nogil=True, cache=True)
+def updatePCAngsd(likeMatrix, indF, S, N, expG):
+	m, n = likeMatrix.shape # Dimension of likelihood matrix
+	m /= 3 # Number of individuals
+
+	# Loop over individuals
+	for ind in xrange(S, min(S+N, m)):
+		# Estimate posterior probabilities
+		probMatrix = np.empty((3, n), dtype=np.float32)
+		for s in xrange(n):
+			probMatrix[0, s] = likeMatrix[3*ind, s]*((1 - indF[ind, s])*(1 - indF[ind, s]))
+			probMatrix[1, s] = likeMatrix[3*ind+1, s]*(2*indF[ind, s]*(1 - indF[ind, s]))
+			probMatrix[2, s] = likeMatrix[3*ind+2, s]*(indF[ind, s]*indF[ind, s])
+		probMatrix /= np.sum(probMatrix, axis=0)
+
+		# Estimate genotype dosages
+		for s in xrange(n):
+			expG[ind, s] = 0
+			for g in xrange(3):
+				expG[ind, s] += probMatrix[g, s]*g
+
+# Estimate posterior expecations of the genotypes and covariance matrix diagonal (PCAngsd)
+@jit("void(f4[:, :], f4[:, :], f4[:], i8, i8, f4[:, :], f4[:])", nopython=True, nogil=True, cache=True)
+def covPCAngsd(likeMatrix, indF, f, S, N, expG, diagC):
+	m, n = likeMatrix.shape # Dimension of likelihood matrix
+	m /= 3 # Number of individuals
+
+	for ind in xrange(S, min(S+N, m)):
+		# Estimate posterior probabilities
+		probMatrix = np.empty((3, n), dtype=np.float32)
+		for s in xrange(n):
+			probMatrix[0, s] = likeMatrix[3*ind, s]*((1 - indF[ind, s])*(1 - indF[ind, s]))
+			probMatrix[1, s] = likeMatrix[3*ind+1, s]*(2*indF[ind, s]*(1 - indF[ind, s]))
+			probMatrix[2, s] = likeMatrix[3*ind+2, s]*(indF[ind, s]*indF[ind, s])
+		probMatrix /= np.sum(probMatrix, axis=0)
+
+		# Estimate genotype dosages and diagonal of GRM
+		diagC[ind] = 0
+		for s in xrange(n):
+			expG[ind, s] = 0
+			temp = 0
+			for g in xrange(3):
+				expG[ind, s] += probMatrix[g, s]*g
+				temp += (g - 2*f[s])*(g - 2*f[s])*probMatrix[g, s]
+			diagC[ind] += temp/(2*f[s]*(1 - f[s]))
+		diagC[ind] /= n
+
+# Normalize the posterior expectations of the genotypes
+@jit("void(f4[:, :], f4[:], i8, i8, f4[:, :])", nopython=True, nogil=True, cache=True)
+def normalizeGeno(expG, f, S, N, X):
+	m, n = expG.shape
+	for ind in xrange(S, min(S+N, m)):
+		for s in xrange(n):
+			X[ind, s] = (expG[ind, s] - 2*f[s])/np.sqrt(2*f[s]*(1 - f[s]))
+
+# Estimate covariance matrix
+def estimateCov(expG, diagC, f, chunks, chunk_N):
+	m, n = expG.shape
+	X = np.empty((m, n), dtype=np.float32)
+
+	# Multithreading
+	threads = [threading.Thread(target=normalizeGeno, args=(expG, f, chunk, chunk_N, X)) for chunk in chunks]
+	for thread in threads:
+		thread.start()
+	for thread in threads:
+		thread.join()
+	
+	C = np.dot(X, X.T)/n
+	np.fill_diagonal(C, diagC)
+	return C.astype(dtype=np.float32)
+
+# Center posterior expectations of the genotype for SVD
+@jit("void(f4[:, :], f4[:], i8, i8)", nopython=True, nogil=True, cache=True)
+def expGcenter(expG, f, S, N):
+	m, n = expG.shape
+	for ind in xrange(S, min(S+N, m)):
+		for s in xrange(n):
+			expG[ind, s] = expG[ind, s]/2 - f[s]
+
+# Estimate individual allele frequencies
+def estimateF(expG, f, e, chunks, chunk_N):
+	m, n = expG.shape
+
+	# Multithreading
+	threads = [threading.Thread(target=expGcenter, args=(expG, f, chunk, chunk_N)) for chunk in chunks]
+	for thread in threads:
+		thread.start()
+	for thread in threads:
+		thread.join()
+
+	# Randomized SVD of rank K (Scikit-Learn)
+	V, s, U = randomized_svd(expG, n_components=e, n_iter=2)
+	F = np.dot(V, np.dot(np.diagflat(s), U)) + f
+	return F.astype(np.float32)
+
+
+##### PCAngsd #####
+def PCAngsd(likeMatrix, EVs, M, f, M_tole=1e-4, threads=1):
+	m, n = likeMatrix.shape # Dimension of likelihood matrix
+	m /= 3 # Number of individuals
+	e = EVs
+	chunk_N = int(np.ceil(float(m)/threads))
+	chunks = [i * chunk_N for i in xrange(threads)]
+
+	# Initiate matrices
+	expG = np.empty((m, n), dtype=np.float32)
+	diagC = np.empty(m, dtype=np.float32)
+
+	# Estimate covariance matrix (Fumagalli) and infer number of PCs
+	if EVs == 0:
+		# Multithreading
+		threads = [threading.Thread(target=covFumagalli, args=(likeMatrix, f, chunk, chunk_N, expG, diagC)) for chunk in chunks]
+		for thread in threads:
+			thread.start()
+		for thread in threads:
+			thread.join()
+
+		# Estimate covariance matrix (Fumagalli)
+		C = estimateCov(expG, diagC, f, chunks, chunk_N)
+
+		# Velicer's Minimum Average Partial (MAP) Test 
+		eigVals, eigVecs = np.linalg.eigh(C) # Eigendecomposition (Symmetric)
+		sort = np.argsort(eigVals)[::-1] # Sorting vector
+		eigVals = eigVals[sort].astype(np.float32) # Sorted eigenvalues
+		eigVals[eigVals < 0] = 0
+		eigVecs = eigVecs[:, sort].astype(np.float32) # Sorted eigenvectors
+		loadings = np.dot(eigVecs, np.diagflat(np.sqrt(eigVals)))
+		mapTest = np.empty(m-1, dtype=np.float32)
+
+		# Loop over m-1 eigenvalues for MAP test
+		for eig in xrange(m-1):
+			partcov = C - (np.dot(loadings[:, 0:(eig + 1)], loadings[:, 0:(eig + 1)].T))
+			d = np.diag(partcov)
+
+			if (np.sum(np.isnan(d)) > 0) or (np.sum(d == 0) > 0) or (np.sum(d < 0) > 0):
+				mapTest[eig] = 1
+			else:
+				d = np.diagflat(1/np.sqrt(d))
+				pr = np.dot(d, np.dot(partcov, d))
+				mapTest[eig] = (np.sum(pr**2) - m)/(m*(m - 1))
+
+		e = max([1, np.argmin(mapTest) + 1]) # Number of principal components retained
+		print "Using " + str(e) + " principal components (MAP test)"
+		
+		# Release memory
+		del eigVals
+		del eigVecs
+		del loadings
+		del partcov
+		del mapTest
+	
+	else:
+		# Multithreading
+		threads = [threading.Thread(target=updateFumagalli, args=(likeMatrix, f, chunk, chunk_N, expG)) for chunk in chunks]
+		for thread in threads:
+			thread.start()
+		for thread in threads:
+			thread.join()
+
+	# Estimate individual allele frequencies
+	predF = estimateF(expG, f, e, chunks, chunk_N)
+	predF.clip(min=1.0/(2*m), max=1-(1.0/(2*m)), out=predF)
+	prevF = np.copy(predF)
+	print "Individual allele frequencies estimated (0)"
 	
 	# Iterative covariance estimation
-	for iteration in range(1, M+1):
-		
-		# Eigen-decomposition
-		eigVals, eigVecs = np.linalg.eig(C*n)
-		sort = np.argsort(eigVals)[::-1] # Sorting vector
-		evSort = eigVals[sort] # Sorted eigenvalues
+	for iteration in xrange(1, M+1):
+		# Multithreading
+		threads = [threading.Thread(target=updatePCAngsd, args=(likeMatrix, predF, chunk, chunk_N, expG)) for chunk in chunks]
+		for thread in threads:
+			thread.start()
+		for thread in threads:
+			thread.join()
 
-		# Patterson test for number of significant eigenvalues
-		if (iteration == 1) & (EVs == 0):
-			Vscale = np.zeros(10)
-			#mPrime = m-1
-			#nPrime = ((mPrime+1)*(np.sum(evSort[:mPrime])**2))/(((mPrime-1)*np.sum(evSort[:mPrime]**2))-(np.sum(evSort[:mPrime])**2))
-			nPrime = n
-			mPrime = m
+		# Estimate individual allele frequencies
+		predF = estimateF(expG, f, e, chunks, chunk_N)
+		predF.clip(min=1.0/(2*m), max=1-(1.0/(2*m)), out=predF)
 
-			# Normalizing eigenvalues - Estimating Wilshart parameters
-			mu = ((np.sqrt(nPrime-1) + np.sqrt(mPrime))**2)
-			sigma = (np.sqrt(nPrime-1) + np.sqrt(mPrime))*(((1/np.sqrt(nPrime-1)) + (1/np.sqrt(mPrime)))**(1/3.0))
-			#l = (mPrime*evSort[0])/np.sum(evSort[:mPrime]) # Scale eigenvalues
-			x = (evSort[0] - mu)/sigma # Normalized eigenvalues (test statistic)
-			Vscale[0] = x
-
-			# Test TW statistics for significance
-			if x > 2.0236:
-				nEV = 1
-			assert (nEV !=0), "0 significant eigenvalues found. Select number of eigenvalues manually!"
-
-			while True:
-				#mPrime = m-1-nEV
-				#nPrime = ((mPrime+1)*(np.sum(evSort[nEV:mPrime])**2))/(((mPrime-1)*np.sum(evSort[nEV:mPrime]**2))-(np.sum(evSort[nEV:mPrime])**2))
-				nPrime = n
-				mPrime = m-nEV
-				
-				# Normalizing eigenvalues - Estimating Wilshart parameters
-				mu = ((np.sqrt(nPrime-1) + np.sqrt(mPrime))**2)
-				sigma = (np.sqrt(nPrime-1) + np.sqrt(mPrime))*(((1/np.sqrt(nPrime-1)) + (1/np.sqrt(mPrime)))**(1/3.0))
-				#l = (mPrime*evSort[nEV])/np.sum(evSort[nEV:mPrime])
-				x = (evSort[nEV] - mu)/sigma
-				Vscale[nEV] = x
-
-				# Test TW statistics for significance
-				if x > 2.0236:
-					nEV += 1
-					if nEV == 10:
-					 	print str(nEV) + " eigenvalue(s) are significant"
-					 	Vscale = Vscale/Vscale[0]
-					 	break
-				else:
-					print str(nEV) + " eigenvalue(s) are significant"
-					Vscale = Vscale/Vscale[0]
-					break
-
-
-		V = eigVecs[:, sort[:nEV]] # Sorted eigenvectors regarding eigenvalue size
-
-		# Multiple linear regression
-		V_bias = np.hstack((np.ones((m, 1)), V)) # Add bias term
-
-		if scaledLR: # Scaled regression
-			V_bias = V_bias*np.append(np.array([1]), Vscale)
-
-		if regLR > 0: # Ridge regression
-			Tau = np.eye(V_bias.shape[1])*regLR
-			hatX = np.dot(np.linalg.inv(np.dot(V_bias.T, V_bias) + Tau), V_bias.T)
-		else:
-			hatX = np.dot(np.linalg.inv(np.dot(V_bias.T, V_bias)), V_bias.T)
-		
-		predEG = np.dot(V_bias, np.dot(hatX, expG))
-		predF = predEG/2 # Estimated allele frequencies from expected genotypes
-		predF = predF.clip(min=0.00001, max=1-0.00001)
-		
-		# Estimate covariance matrix
-		for ind in range(m):
-			# Genotype frequencies based on individual allele frequencies under HWE
-			fMatrix = np.vstack(((1-predF[ind])**2, 2*predF[ind]*(1-predF[ind]), predF[ind]**2))
-			
-			wLike = likeMatrix[(3*ind):(3*ind+3)]*fMatrix # Weighted likelihoods
-			gProp = wLike/np.sum(wLike, axis=0) # Genotype probabilities of individual
-			expG[ind] = np.sum(gProp*gVector, axis=0) # Expected genotypes
-
-			# Estimate diagonal entries in covariance matrix
-			diagC[ind] = np.sum(np.sum(((np.ones((3, n))*gVector - 2*f)*gProp)**2, axis=0)/(normV**2))/n
-
-		X = (expG - 2*f)/normV # Standardized genotype matrix
-
-		# LD regression
-		if LD > 0:
-			print "Performing LD regression"
-			Wr = np.zeros((m, n))
-			diagWr = np.zeros(m)
-
-			# Compute the residual genotype matrix
-			for s in range(1, n):
-				# Setting up sites to use
-				if s < LD:
-					sArray = np.arange(s) # Preceding sites
-				else:
-					sArray = np.arange(s-LD, s) # Preceding sites
-
-				X_LD = X[:, sArray]
-				y_LD = X[:, s]
-				Tau_LD = np.eye(X_LD.shape[1])*0.01
-				hat_LD = np.dot(np.linalg.inv(np.dot(X_LD.T, X_LD) + Tau_LD), X_LD.T)
-				Wr[:, s] =  np.dot(X_LD, np.dot(hat_LD, y_LD))
-
-			for ind in range(m):
-				diagWr[ind] = np.dot(Wr[ind].T, Wr[ind])
-
-			C = np.dot(X - Wr, (X - Wr).T) # Covariance matrix for i != j
-			np.fill_diagonal(C, (diagC - diagWr)) # Entries for i == j
-			C = C/np.sum(np.var(X - Wr, axis=0)) # Normalize covariance matrix
-
-		else:
-			C = np.dot(X, X.T)/n # Covariance matrix for i != j
-			np.fill_diagonal(C, diagC) # Entries for i == j
-
-		# Break iterative covariance update if converged
-		updateDiff = rmse(predF, prevF)
-		print "Covariance matrix computed	(" + str(iteration) + ") Diff=" + str(updateDiff)
-		if updateDiff <= M_tole:
-			print "PCAngsd converged at iteration: " + str(iteration)
+		# Break iterative update if converged
+		diff = rmse2d_multi(predF, prevF, chunks, chunk_N)
+		print "Individual allele frequencies estimated (" + str(iteration) + "). RMSD=" + str(diff)
+		if diff < M_tole:
+			print "Estimation of individual allele frequencies has converged."
 			break
 
-		prevF = np.copy(predF) # Update break condition
+		if iteration == 1:
+			oldDiff = diff
+		else:
+			# Second convergence criterion
+			if abs(diff - oldDiff) <= 1e-5:
+				print "Estimation of individual allele frequencies has converged. RMSD between iterations: " + str(abs(diff - oldDiff))
+				break
+			else:
+				oldDiff = diff
 
-	return C, predF, nEV, X, expG
+		prevF = np.copy(predF)
+		
+	# Multithreading
+	threads = [threading.Thread(target=covPCAngsd, args=(likeMatrix, predF, f, chunk, chunk_N, expG, diagC)) for chunk in chunks]
+	for thread in threads:
+		thread.start()
+	for thread in threads:
+		thread.join()
+
+	# Estimate covariance matrix (PCAngsd)
+	C = estimateCov(expG, diagC, f, chunks, chunk_N)
+
+	return C, predF, e, expG

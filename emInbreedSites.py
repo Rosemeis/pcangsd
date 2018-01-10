@@ -12,68 +12,82 @@ from helpFunctions import *
 
 # Import libraries
 import numpy as np
+from numba import jit
 
+# Inner update
+@jit("void(f4[:, :], f4[:, :], f4[:], f4[:], f4[:])", nopython=True, nogil=True, cache=True)
+def innerEM(likeMatrix, indf, expH, expG, F):
+	m, n = likeMatrix.shape # Dimension of likelihood matrix
+	m /= 3 # Number of individuals
+	logTest = np.zeros(n, dtype=np.float32)
+
+	for ind in xrange(m):
+		probMatrix = np.empty((3, n), dtype=np.float32)
+		for s in xrange(n):
+			probMatrix[0, s] = likeMatrix[3*ind, s]*((1 - indf[ind, s])*(1 - indf[ind, s]) + (1 - indf[ind, s])*indf[ind, s]*F[s])
+			probMatrix[1, s] = likeMatrix[3*ind + 1, s]*(2*indf[ind, s]*(1 - indf[ind, s])*(1 - F[s]))
+			probMatrix[2, s] = likeMatrix[3*ind + 2, s]*(indf[ind, s]*indf[ind, s] + (1 - indf[ind, s])*indf[ind, s]*F[s])
+			expH[s] += 2*indf[ind, s]*(1 - indf[ind, s]) # Expected number of heterozygotes
+		probMatrix /= np.sum(probMatrix, axis=0)
+		expG += probMatrix[1, :] # Sum the posterior of each individual
+
+	for s in xrange(n):
+		F[s] = 1 - (expG[s]/expH[s])	
+
+# Loglikelihood estimates
+@jit("void(f4[:, :], f4[:, :], f4[:], f4[:], f4[:])", nopython=True, nogil=True, cache=True)
+def loglike(likeMatrix, indf, F, logAlt, logNull):
+	m, n = likeMatrix.shape # Dimension of likelihood matrix
+	m /= 3 # Number of individuals
+
+	for ind in xrange(m):
+		likeAlt = np.empty((3, n), dtype=np.float32)
+		likeNull = np.empty((3, n), dtype=np.float32)
+		for s in xrange(n):
+			# Alternative model
+			likeAlt[0, s] = likeMatrix[3*ind, s]*((1 - indf[ind, s])*(1 - indf[ind, s]) + (1 - indf[ind, s])*indf[ind, s]*F[s])
+			likeAlt[1, s] = likeMatrix[3*ind + 1, s]*(2*indf[ind, s]*(1 - indf[ind, s])*(1 - F[s]))
+			likeAlt[2, s] = likeMatrix[3*ind + 2, s]*(indf[ind, s]*indf[ind, s] + (1 - indf[ind, s])*indf[ind, s]*F[s])
+			logAlt[s] += np.log(np.sum(likeAlt[:, s]))
+
+			# Null model
+			likeNull[0, s] = likeMatrix[3*ind, s]*((1 - indf[ind, s])*(1 - indf[ind, s]))
+			likeNull[1, s] = likeMatrix[3*ind + 1, s]*(2*indf[ind, s]*(1 - indf[ind, s]))
+			likeNull[2, s] = likeMatrix[3*ind + 2, s]*(indf[ind, s]*indf[ind, s])
+			logNull[s] += np.log(np.sum(likeNull[:, s]))
 
 # EM algorithm for estimation of inbreeding coefficients
-def inbreedSitesEM(likeMatrix, f, EM=200, EM_tole=1e-4):
-	mTotal, n = likeMatrix.shape # Dimension of likelihood matrix
-	m = mTotal/3 # Number of individuals
-	F = np.random.rand(n) # Random initialization of inbreeding coefficients
-	F_prev = np.ones(n)*np.inf # Initiate likelihood measure to infinity
-	logAlt = 0
-	logNull = 0
+def inbreedSitesEM(likeMatrix, indf, EM=200, EM_tole=1e-4):
+	m, n = likeMatrix.shape # Dimension of likelihood matrix
+	m /= 3 # Number of individuals
+	F = np.random.rand(n).astype(np.float32) # Random initialization of inbreeding coefficients
 
-	for iteration in range(EM): # EM iterations
-		if f.ndim == 1:
-			# Estimated genotype frequencies given F
-			fMatrix = np.vstack(((1-f)**2 + (1-f)*f*F, 2*f*(1-f)*(1-F), f**2 + (1-f)*f*F))
-			f0 = np.vstack(((1-f)**2, 2*f*(1-f), f**2)) # F=0
-
-			# Expected number of heterozygotes
-			expH = float(m)*2*f*(1-f)
-		else:
-			expH = np.zeros(n)
-		
-		expG1 = np.zeros(n) # Container for posterior of heterozygosity
-
-		for ind in range(m):
-			if f.ndim == 2:
-				# Estimated genotype frequencies given F
-				fMatrix = np.vstack(((1-f[ind])**2 + (1-f[ind])*f[ind]*F, 2*f[ind]*(1-f[ind])*(1-F), f[ind]**2 + (1-f[ind])*f[ind]*F))
-
-				# Expected number of heterozygotes
-				expH += 2*f[ind]*(1-f[ind])
-
-			wLike = likeMatrix[(3*ind):(3*ind+3)]*fMatrix # Weighted likelihood by prior
-			gProb = wLike/np.sum(wLike, axis=0) # Posterior probabilities
-
-			# E-step
-			expG1 += gProb[1, :] # Sum the posterior of each individual
-		
-		F = 1 - (expG1/expH) # Updated inbreeding coefficients (M-step)
+	# EM algorithm
+	for iteration in xrange(1, EM + 1):
+		expG = np.zeros(n, dtype=np.float32) # Container for posterior probability of heterozygosity
+		expH = np.zeros(n, dtype=np.float32) # Container for expected heterozygosity
+		innerEM(likeMatrix, indf, expH, expG, F) # Update F
 
 		# Break EM update if converged
-		updateDiff = rmse(F, F_prev)
-		print "Inbreeding coefficients computed	(" +str(iteration) + ") Diff=" + str(updateDiff)
-		if updateDiff < EM_tole:
-			print "EM (Inbreeding) converged at iteration: " + str(iteration)
-			break
-		elif iteration == (EM-1):
-			print "EM (Inbreeding) was stopped at " + str(iteration) + " with diff: " + str(updateDiff)
+		if iteration > 1:
+			updateDiff = rmse1d(F, F_prev)
+			print "Inbreeding coefficients computed	(" +str(iteration) + ") Diff=" + str(updateDiff)
+			if updateDiff < EM_tole:
+				print "EM (Inbreeding) converged at iteration: " + str(iteration)
+				break
+		else:
+			print "Inbreeding coefficients computed	(" +str(iteration) + ")"
 
 		F_prev = np.copy(F)
 
-	# LRT test statistic
-	for ind in range(m):
-		if f.ndim == 2:
-			# Estimated genotype frequencies given F
-			fMatrix = np.vstack(((1-f[ind])**2 + (1-f[ind])*f[ind]*F, 2*f[ind]*(1-f[ind])*(1-F), f[ind]**2 + (1-f[ind])*f[ind]*F))
-			f0 = np.vstack(((1-f[ind])**2, 2*f[ind]*(1-f[ind]), f[ind]**2)) # F=0
+	expH = None
+	expG = None
 
-		wLike = likeMatrix[(3*ind):(3*ind+3)]*fMatrix # Weighted likelihood by prior
-		w0 = likeMatrix[(3*ind):(3*ind+3)]*f0 # Weighted likelihood of null model
-		logAlt += np.log(np.sum(wLike, axis=0)) # Log-likelihood for individual
-		logNull += np.log(np.sum(w0, axis=0)) # Log-likelihood for individual in null model
+	# LRT test statistic
+	logAlt = np.zeros(n, dtype=np.float32)
+	logNull = np.zeros(n, dtype=np.float32)
+	for ind in xrange(m):
+		loglike(likeMatrix, indf, F, logAlt, logNull)
 
 	lrt = 2*(logAlt - logNull)
 

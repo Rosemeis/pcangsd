@@ -10,33 +10,55 @@ __author__ = "Jonas Meisner"
 # Import libraries
 import numpy as np
 import scipy.stats as stats
-from helpFunctions import *
+from numba import jit
+import threading
+
+# Normalize the posterior expectations of the genotypes
+@jit("void(f4[:, :], f4[:], i8, i8, f4[:, :])", nopython=True, nogil=True, cache=True)
+def normalizeGeno(expG, f, S, N, X):
+	m, n = expG.shape
+	for ind in xrange(S, min(S+N, m)):
+		for s in xrange(n):
+			X[ind, s] = (expG[ind, s] - 2*f[s])/np.sqrt(2*f[s]*(1 - f[s]))
 
 # Selection scan
-def selectionScan(X, C, nEV, model=1):
+def selectionScan(expG, f, C, nEV, model=1, threads=1):
 	# Perform eigendecomposition on covariance matrix
-	eVals, eVecs = np.linalg.eig(C)
-	sort = np.argsort(eVals)[::-1]
-	evSort = eVals[sort][:-1]
-	V = eVecs[:, sort[:nEV]]
-	l = evSort[:nEV]
+	m, n = expG.shape
+	eigVals, eigVecs = np.linalg.eigh(C) # Eigendecomposition (Symmetric)
+	sort = np.argsort(eigVals)[::-1] # Sorting vector
+	l = eigVals[sort[:nEV]].astype(np.float32) # Sorted eigenvalues
+	V = eigVecs[:, sort[:nEV]].astype(np.float32) # Sorted eigenvectors
+
+	chunk_N = int(np.ceil(float(m)/threads))
+	chunks = [i * chunk_N for i in xrange(threads)]
 
 	if model==1: # FastPCA
-		test = np.zeros((nEV, X.shape[1]))
+		X = np.empty((m, n), dtype=np.float32)
+
+		# Multithreading
+		threads = [threading.Thread(target=normalizeGeno, args=(expG, f, chunk, chunk_N, X)) for chunk in chunks]
+		for thread in threads:
+			thread.start()
+		for thread in threads:
+			thread.join()
+		
+		# Test statistic container
+		test = np.zeros((nEV, n), dtype=np.float32)
 
 		# Compute p-values for each PC in each site
-		for eigVec in range(nEV):
+		for eigVec in xrange(nEV):
 			# Weighted SNPs are chi-square distributed with df = 1
 			test[eigVec] = (1.0/l[eigVec])*(np.dot(X.T, V[:, eigVec])**2)
 
 
 	elif model==2: # PCAdapt
-		test = np.zeros(X.shape[1])
+		test = np.zeros(n, dtype=np.float32)
 
 		# Linear regressions
 		hatX = np.dot(np.linalg.inv(np.dot(V.T, V)), V.T)
-		B = np.dot(hatX, X)
-		res = X - np.dot(V, np.dot(hatX, X))
+		B = np.dot(hatX, expG)
+		res = expG - np.dot(V, np.dot(hatX, expG))
 
 		# Z-scores estimation
 		resStd = np.std(res, axis=0, ddof=1) # Standard deviations of residuals
@@ -46,11 +68,7 @@ def selectionScan(X, C, nEV, model=1):
 		Zinvcov = np.linalg.inv(np.cov(Z)) # Inverse covariance matrix of Z-scores
 
 		# Calculate Mahalanobis distances
-		for s in range(X.shape[1]):
+		for s in xrange(n):
 			test[s] = np.sqrt(np.dot(np.dot((Z[:, s] - Zmeans), Zinvcov), (Z[:, s] - Zmeans)))
-
-		gi = np.median(test)/stats.chi2.median(df=nEV)
-		print "Genomic inflation factor: " + str(gi)
-		test = test/gi
 
 	return test
