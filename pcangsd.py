@@ -65,6 +65,8 @@ parser.add_argument("-admix_alpha", metavar="FLOAT-LIST", type=float, nargs="+",
 	help="L1-regularization factor in NMF for sparseness in Q")
 parser.add_argument("-admix_seed", metavar="INT-LIST", type=int, nargs="+", default=[0],
 	help="Random seed for admixture estimation")
+parser.add_argument("-admix_K", metavar="INT-LIST", type=int, nargs="+", default=[0],
+	help="Number of ancestral population for admixture estimation")
 parser.add_argument("-admix_iter", metavar="INT", type=int, default=100,
 	help="Maximum iterations for admixture proportions estimation - NMF (100)")
 parser.add_argument("-admix_tole", metavar="FLOAT", type=float, default=1e-5,
@@ -77,7 +79,8 @@ parser.add_argument("-freq_save", action="store_true",
 	help="Save estimated allele frequencies as files")
 parser.add_argument("-sites_save", action="store_true",
 	help="Save marker IDs of filtered sites")
-parser.add_argument("-threads", metavar="INT", type=int, default=1)
+parser.add_argument("-threads", metavar="INT", type=int, default=1,
+	help="Number of threads")
 parser.add_argument("-o", metavar="OUTPUT", help="Prefix output file name", default="pcangsd")
 args = parser.parse_args()
 
@@ -274,20 +277,25 @@ del expG
 
 ##### Admixture proportions #####
 if args.admix:
-	K = nEV + 1
-	for a in args.admix_alpha:
-		for s in args.admix_seed:
-			print "\n" + "Estimating admixture using NMF with K=" + str(K) + ", alpha=" + str(a) + " and seed=" + str(s)
-			Q_admix, F_admix = admixNMF(indf, K, C, a, args.admix_iter, args.admix_tole, s, args.admix_batch, args.threads)
+	if args.admix_K[0] == 0:
+		K_list = [nEV + 1]
+	else:
+		K_list = args.admix_K
 
-			# Save data frame
-			pd.DataFrame(Q_admix).to_csv(str(args.o) + ".K" + str(K) + ".a" + str(a) + ".s" + str(s) + ".qopt", sep="\t", header=False, index=False)
-			print "Saved admixture proportions as " + str(args.o) + ".K" + str(K) + ".a" + str(a) + ".s" + str(s) + ".qopt"
+	for K in K_list:
+		for a in args.admix_alpha:
+			for s in args.admix_seed:
+				print "\n" + "Estimating admixture using NMF with K=" + str(K) + ", alpha=" + str(a) + " and seed=" + str(s)
+				Q_admix, F_admix = admixNMF(indf, K, C, a, args.admix_iter, args.admix_tole, s, args.admix_batch, args.threads)
 
-			if args.admix_save:
-				pd.DataFrame(F_admix).to_csv(str(args.o) + ".K" + str(K) + ".a" + str(a) + ".s" + str(s) + ".fopt.gz", sep="\t", header=False, index=False, compression="gzip")
-				print "Saved population-specific allele frequencies as " + str(args.o) + ".K" + str(K) + ".a" + str(a) + ".fopt.gz"
+				# Save data frame
+				pd.DataFrame(Q_admix).to_csv(str(args.o) + ".K" + str(K) + ".a" + str(a) + ".s" + str(s) + ".qopt", sep="\t", header=False, index=False)
+				print "Saved admixture proportions as " + str(args.o) + ".K" + str(K) + ".a" + str(a) + ".s" + str(s) + ".qopt"
 
-			# Release memory
-			del Q_admix
-			del F_admix
+				if args.admix_save:
+					pd.DataFrame(F_admix).to_csv(str(args.o) + ".K" + str(K) + ".a" + str(a) + ".s" + str(s) + ".fopt.gz", sep="\t", header=False, index=False, compression="gzip")
+					print "Saved population-specific allele frequencies as " + str(args.o) + ".K" + str(K) + ".a" + str(a) + ".fopt.gz"
+
+				# Release memory
+				del Q_admix
+				del F_admix

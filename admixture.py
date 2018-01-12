@@ -17,6 +17,8 @@ def admixNMF(X, K, cov, alpha=0, iter=50, tole=1e-5, seed=0, batch=20, threads=1
 	Q = np.random.rand(m, K).astype(np.float32)
 	Q /= np.sum(Q, axis=1, keepdims=True)
 	F = np.random.rand(n, K).astype(np.float32)
+	Q.clip(min=1e-7, max=1-(1e-7), out=Q)
+	F.clip(min=1e-7, max=1-(1e-7), out=F)
 	shuffleX = np.random.permutation(n)
 	X = X[:, shuffleX]
 	Xnorm = frobeniusSingle(X)
@@ -46,7 +48,7 @@ def admixNMF(X, K, cov, alpha=0, iter=50, tole=1e-5, seed=0, batch=20, threads=1
 			for inner in xrange(pF): # Acceleration updates
 				F_prev = np.copy(F[b:bEnd])
 				F[b:bEnd] *= A/np.dot(F[b:bEnd], B)
-				F[b:bEnd].clip(min=1e-16, out=F[b:bEnd])
+				F[b:bEnd].clip(min=1e-7, max=1-(1e-7), out=F[b:bEnd])
 
 				if inner == 0:
 					F_init = frobenius(F[b:bEnd], F_prev)
@@ -60,7 +62,7 @@ def admixNMF(X, K, cov, alpha=0, iter=50, tole=1e-5, seed=0, batch=20, threads=1
 			for inner in xrange(pQ): # Acceleration updates
 				Q_prev = np.copy(Q)
 				Q *= A/(np.dot(Q, B) + alpha)
-				Q.clip(min=1e-16, out=Q)
+				Q.clip(min=1e-7, out=Q)
 				Q /= np.sum(Q, axis=1, keepdims=True)
 
 				if inner == 0:
@@ -85,5 +87,4 @@ def admixNMF(X, K, cov, alpha=0, iter=50, tole=1e-5, seed=0, batch=20, threads=1
 
 	X = X[:, np.argsort(shuffleX)]
 	F = F[np.argsort(shuffleX)]
-	F.clip(max=1-(1e-16), out=F)
 	return Q, F
