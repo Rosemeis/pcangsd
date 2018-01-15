@@ -6,7 +6,6 @@ __author__ = "Jonas Meisner"
 
 # Import libraries
 import numpy as np
-from numba import jit
 from helpFunctions import *
 
 ##### Functions #####

@@ -34,9 +34,9 @@ parser.add_argument("-beagle", metavar="FILE",
 parser.add_argument("-n", metavar="INT", type=int,
 	help="Number of individuals")
 parser.add_argument("-iter", metavar="INT", type=int, default=100,
-	help="Maximum iterations for covariance estimation (100)")
+	help="Maximum iterations for estimation of individual allele frequencies (100)")
 parser.add_argument("-tole", metavar="FLOAT", type=float, default=5e-5,
-	help="Tolerance for covariance matrix estimation update (5e-5)")
+	help="Tolerance for update in estimation of individual allele frequencies (5e-5)")
 parser.add_argument("-maf_iter", metavar="INT", type=int, default=200,
 	help="Maximum iterations for population allele frequencies estimation - EM (200)")
 parser.add_argument("-maf_tole", metavar="FLOAT", type=float, default=5e-5,
@@ -63,12 +63,12 @@ parser.add_argument("-admix", action="store_true",
 	help="Estimate admixture proportions")
 parser.add_argument("-admix_alpha", metavar="FLOAT-LIST", type=float, nargs="+", default=[0],
 	help="L1-regularization factor in NMF for sparseness in Q")
-parser.add_argument("-admix_seed", metavar="INT-LIST", type=int, nargs="+", default=[0],
+parser.add_argument("-admix_seed", metavar="INT-LIST", type=int, nargs="+", default=[None],
 	help="Random seed for admixture estimation")
 parser.add_argument("-admix_K", metavar="INT-LIST", type=int, nargs="+", default=[0],
 	help="Number of ancestral population for admixture estimation")
 parser.add_argument("-admix_iter", metavar="INT", type=int, default=100,
-	help="Maximum iterations for admixture proportions estimation - NMF (100)")
+	help="Maximum iterations for admixture estimation - NMF (100)")
 parser.add_argument("-admix_tole", metavar="FLOAT", type=float, default=1e-5,
 	help="Tolerance for admixture estimation update - EM (1e-5)")
 parser.add_argument("-admix_batch", metavar="INT", type=int, default=20,
@@ -289,12 +289,20 @@ if args.admix:
 				Q_admix, F_admix = admixNMF(indf, K, C, a, args.admix_iter, args.admix_tole, s, args.admix_batch, args.threads)
 
 				# Save data frame
-				pd.DataFrame(Q_admix).to_csv(str(args.o) + ".K" + str(K) + ".a" + str(a) + ".s" + str(s) + ".qopt", sep="\t", header=False, index=False)
-				print "Saved admixture proportions as " + str(args.o) + ".K" + str(K) + ".a" + str(a) + ".s" + str(s) + ".qopt"
+				if s == None:
+					pd.DataFrame(Q_admix).to_csv(str(args.o) + ".K" + str(K) + ".a" + str(a) + ".qopt", sep="\t", header=False, index=False)
+					print "Saved admixture proportions as " + str(args.o) + ".K" + str(K) + ".a" + str(a) + ".qopt"
+				else:
+					pd.DataFrame(Q_admix).to_csv(str(args.o) + ".K" + str(K) + ".a" + str(a) + ".s" + str(s) + ".qopt", sep="\t", header=False, index=False)
+					print "Saved admixture proportions as " + str(args.o) + ".K" + str(K) + ".a" + str(a) + ".s" + str(s) + ".qopt"
 
 				if args.admix_save:
-					pd.DataFrame(F_admix).to_csv(str(args.o) + ".K" + str(K) + ".a" + str(a) + ".s" + str(s) + ".fopt.gz", sep="\t", header=False, index=False, compression="gzip")
-					print "Saved population-specific allele frequencies as " + str(args.o) + ".K" + str(K) + ".a" + str(a) + ".fopt.gz"
+					if s == None:
+						pd.DataFrame(F_admix).to_csv(str(args.o) + ".K" + str(K) + ".a" + str(a) + ".s" + str(s) + ".fopt.gz", sep="\t", header=False, index=False, compression="gzip")
+						print "Saved population-specific allele frequencies as " + str(args.o) + ".K" + str(K) + ".a" + str(a) + ".fopt.gz"
+					else:
+						pd.DataFrame(F_admix).to_csv(str(args.o) + ".K" + str(K) + ".a" + str(a) + ".s" + str(s) + ".fopt.gz", sep="\t", header=False, index=False, compression="gzip")
+						print "Saved population-specific allele frequencies as " + str(args.o) + ".K" + str(K) + ".a" + str(a) + ".s" + str(s) + ".fopt.gz"
 
 				# Release memory
 				del Q_admix
