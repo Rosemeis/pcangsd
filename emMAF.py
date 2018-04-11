@@ -16,7 +16,7 @@ from helpFunctions import *
 def updateF(likeMatrix, f, S, N):
 	m, n = likeMatrix.shape
 	m /= 3
-	newF = np.zeros(n, dtype=np.float32)
+	newF = np.zeros(n)
 
 	# Multithreading	
 	threads = [threading.Thread(target=innerEM, args=(likeMatrix, f, chunk, N, newF)) for chunk in S]
@@ -28,7 +28,7 @@ def updateF(likeMatrix, f, S, N):
 	return newF
 
 # Multithreaded inner update
-@jit("void(f4[:, :], f4[:], i8, i8, f4[:])", nopython=True, nogil=True, cache=True)
+@jit("void(f4[:, :], f8[:], i8, i8, f8[:])", nopython=True, nogil=True, cache=True)
 def innerEM(likeMatrix, f, S, N, newF):
 	m, n = likeMatrix.shape # Dimension of likelihood matrix
 	m /= 3 # Number of individuals
@@ -42,10 +42,10 @@ def innerEM(likeMatrix, f, S, N, newF):
 		newF[s] /= m
 
 # EM algorithm for estimation of population allele frequencies
-def alleleEM(likeMatrix, EM=200, EM_tole=1e-4, threads=1):
+def alleleEM(likeMatrix, EM=200, EM_tole=5e-5, threads=1):
 	m, n = likeMatrix.shape
 	m /= 3
-	f = np.ones(n, dtype=np.float32)*0.25 # Uniform initialization
+	f = np.ones(n)*0.25 # Uniform initialization
 
 	# Prepare for multithreading
 	chunk_N = int(np.ceil(float(n)/threads))
@@ -60,16 +60,5 @@ def alleleEM(likeMatrix, EM=200, EM_tole=1e-4, threads=1):
 			if diff < EM_tole:
 				print "EM (MAF) converged at iteration: " + str(iteration)
 				break
-
-		if iteration == 2:
-			oldDiff = diff
-		elif iteration > 2:
-			# Second convergence criterion
-			if abs(diff - oldDiff) <= 1e-5:
-				print "Estimation of individual allele frequencies has converged " + str(iteration) + ". RMSD between iterations: " + str(abs(diff - oldDiff))
-				break
-			else:
-				oldDiff = diff
-
 		f_prev = np.copy(f)
 	return f

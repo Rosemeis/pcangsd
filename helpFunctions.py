@@ -8,10 +8,11 @@ __author__ = "Jonas Meisner"
 import numpy as np
 from numba import jit
 from math import sqrt
+from scipy.stats import binom
 import threading
 
 # Root mean squared error
-@jit("f8(f4[:], f4[:])", nopython=True, nogil=True, cache=True)
+@jit("f8(f8[:], f8[:])", nopython=True, nogil=True, cache=True)
 def rmse1d(A, B):
 	sumA = 0.0
 	for i in xrange(A.shape[0]):
@@ -21,6 +22,26 @@ def rmse1d(A, B):
 
 # Multi-threaded RMSE
 @jit("void(f4[:, :], f4[:, :], i8, i8, f8[:])", nopython=True, nogil=True, cache=True)
+def rmse2d_inner_float32(A, B, S, N, V):
+	m, n = A.shape
+	for i in xrange(S, min(S+N, m)):
+		for j in xrange(n):
+			V[i] += (A[i, j] - B[i, j])*(A[i, j] - B[i, j])
+
+def rmse2d_multi_float32(A, B, chunks, chunk_N):
+	m, n = A.shape
+	sumA = np.zeros(m)
+
+	# Multithreading
+	threads = [threading.Thread(target=rmse2d_inner_float32, args=(A, B, chunk, chunk_N, sumA)) for chunk in chunks]
+	for thread in threads:
+		thread.start()
+	for thread in threads:
+		thread.join()
+
+	return sqrt(np.sum(sumA)/(m*n))
+
+@jit("void(f8[:, :], f8[:, :], i8, i8, f8[:])", nopython=True, nogil=True, cache=True)
 def rmse2d_inner(A, B, S, N, V):
 	m, n = A.shape
 	for i in xrange(S, min(S+N, m)):
@@ -41,7 +62,7 @@ def rmse2d_multi(A, B, chunks, chunk_N):
 	return sqrt(np.sum(sumA)/(m*n))
 
 # Root mean squared error
-@jit("f8(f4[:, :], f4[:, :])", nopython=True, nogil=True, cache=True)
+@jit("f8(f8[:, :], f8[:, :])", nopython=True, nogil=True, cache=True)
 def rmse2d(A, B):
 	sumA = 0.0
 	for i in xrange(A.shape[0]):
@@ -81,10 +102,27 @@ def frobenius(A, B):
 	return sqrt(sumA)
 
 # Frobenius norm of single matrix
-@jit("f8(f4[:, :])", nopython=True, nogil=True, cache=True)
+@jit("f8(f8[:, :])", nopython=True, nogil=True, cache=True)
 def frobeniusSingle(A):
 	sumA = 0.0
 	for i in xrange(A.shape[0]):
 		for j in xrange(A.shape[1]):
 			sumA += A[i, j]*A[i, j]
 	return sqrt(sumA)
+
+# Convert PLINK genotype matrix into genotype likelihoods
+@jit("void(f4[:, :], f4[:, :], i8, i8, f8)", nopython=True, nogil=True, cache=True)
+def convertPlink(likeMatrix, G, S, N, epsilon):
+	m, n = G.shape # Dimension of genotype matrix
+	for ind in xrange(S, min(S+N, m)):
+		for s in xrange(n):
+			if np.isnan(G[ind, s]):
+				likeMatrix[3*ind, s] = 0.333333
+				likeMatrix[3*ind + 1, s] = 0.333333
+				likeMatrix[3*ind + 2, s] = 0.333333
+			else:
+				for g in xrange(3):
+					if int(G[ind, s]) == g:
+						likeMatrix[3*ind + g, s] = 1.0 - epsilon
+					else:
+						likeMatrix[3*ind + g, s] = epsilon/2.0

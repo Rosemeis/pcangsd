@@ -14,7 +14,7 @@ from numba import jit
 import threading
 
 # Normalize the posterior expectations of the genotypes
-@jit("void(f4[:, :], f4[:], i8, i8, f4[:, :])", nopython=True, nogil=True, cache=True)
+@jit("void(f4[:, :], f8[:], i8, i8, f8[:, :])", nopython=True, nogil=True, cache=True)
 def normalizeGeno(expG, f, S, N, X):
 	m, n = expG.shape
 	for ind in xrange(S, min(S+N, m)):
@@ -27,14 +27,14 @@ def selectionScan(expG, f, C, nEV, model=1, threads=1):
 	m, n = expG.shape
 	eigVals, eigVecs = np.linalg.eigh(C) # Eigendecomposition (Symmetric)
 	sort = np.argsort(eigVals)[::-1] # Sorting vector
-	l = eigVals[sort[:nEV]].astype(np.float32) # Sorted eigenvalues
-	V = eigVecs[:, sort[:nEV]].astype(np.float32) # Sorted eigenvectors
+	l = eigVals[sort[:nEV]] # Sorted eigenvalues
+	V = eigVecs[:, sort[:nEV]] # Sorted eigenvectors
 
 	chunk_N = int(np.ceil(float(m)/threads))
 	chunks = [i * chunk_N for i in xrange(threads)]
 
 	if model==1: # FastPCA
-		X = np.empty((m, n), dtype=np.float32)
+		X = np.zeros((m, n))
 
 		# Multithreading
 		threads = [threading.Thread(target=normalizeGeno, args=(expG, f, chunk, chunk_N, X)) for chunk in chunks]
@@ -44,7 +44,7 @@ def selectionScan(expG, f, C, nEV, model=1, threads=1):
 			thread.join()
 		
 		# Test statistic container
-		test = np.zeros((nEV, n), dtype=np.float32)
+		test = np.zeros((nEV, n))
 
 		# Compute p-values for each PC in each site
 		for eigVec in xrange(nEV):
@@ -53,7 +53,7 @@ def selectionScan(expG, f, C, nEV, model=1, threads=1):
 
 
 	elif model==2: # PCAdapt
-		test = np.zeros(n, dtype=np.float32)
+		test = np.zeros(n)
 
 		# Linear regressions
 		hatX = np.dot(np.linalg.inv(np.dot(V.T, V)), V.T)

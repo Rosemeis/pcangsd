@@ -1,10 +1,11 @@
 # PCAngsd
 
-**Version 0.8**
+**Version 0.9** 
+*PCAngsd now supports PLINK files!*
 
-Framework for analyzing low depth next-generation sequencing (NGS) data in heterogeneous populations using principal component analysis (PCA). Population structure is inferred to detect the number of significant principal components and to estimate individual allele frequencies using a SVD model based on genotype dosages. The estimated individual allele frequencies based on population structure are then used in an Empirical Bayes method to update the genotype dosages such that an updated set of individual allele frequencies can be estimated iteratively. A covariance matrix can be estimated using the updated prior information of the estimated individual allele frequencies.
+Framework for analyzing low depth next-generation sequencing (NGS) data in heterogeneous populations using principal component analysis (PCA). Population structure is inferred to detect the number of significant principal components which is used to estimate individual allele frequencies using genotype dosages in a SVD model. The estimated individual allele frequencies are then used in an probabilistic framework to update the genotype dosages such that an updated set of individual allele frequencies can be estimated iteratively based on inferred population structure. A covariance matrix can be estimated using the updated prior information of the estimated individual allele frequencies.
 
-The estimated individual allele frequencies and principal components can be used as prior knowledge in other probabilistic methods based on an Empirical Bayes approach. PCAngsd can perform the following analyses: 
+The estimated individual allele frequencies and principal components can be used as prior knowledge in other probabilistic methods based on a same Bayesian principle. PCAngsd can perform the following analyses: 
 
 * Covariance matrix
 * Genotype calling
@@ -36,4 +37,5 @@ PCAngsd is used by running the main caller file pcangsd.py. To see all available
 python pcangsd.py -h
 ```
 
-The only input PCAngsd needs and accepts is estimated genotype likelihoods in Beagle format. These can be estimated using [ANGSD](https://github.com/ANGSD/angsd).
+The only input PCAngsd needs is estimated genotype likelihoods in Beagle format. These can be estimated using [ANGSD](https://github.com/ANGSD/angsd).
+New functionality for using PLINK files has been added (version 0.9). Genotypes are automatically converted into a genotype likelihood matrix. 

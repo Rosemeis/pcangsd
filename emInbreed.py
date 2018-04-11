@@ -19,7 +19,7 @@ import numpy as np
 def inbreedEM(likeMatrix, f, model=1, EM=200, EM_tole=1e-4):
 	m, n = likeMatrix.shape # Dimension of genotype likelihood matrix
 	m /= 3 # Number of individuals
-	F = np.random.rand(m).astype(np.float32) # Random intialization of inbreeding coefficients
+	F = np.random.rand(m) # Random intialization of inbreeding coefficients
 	F_prev = np.copy(F)
 
 	if model == 1: # Maximum likelihood estimator
