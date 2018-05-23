@@ -9,7 +9,7 @@ The estimators can be selected by the model parameter (model=1 for MLE, model=2 
 __author__ = "Jonas Meisner"
 
 # Import help functions
-from helpFunctions import *
+from helpFunctions import rmse1d
 
 # Import libraries
 import numpy as np

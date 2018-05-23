@@ -9,7 +9,7 @@ __author__ = "Jonas Meisner"
 import numpy as np
 from numba import jit
 import threading
-from helpFunctions import *
+from helpFunctions import rmse1d
 
 ##### Functions #####
 # Calculate posterior genotype probabilities
@@ -18,7 +18,7 @@ def updateF(likeMatrix, f, S, N):
 	m /= 3
 	newF = np.zeros(n)
 
-	# Multithreading	
+	# Multithreading
 	threads = [threading.Thread(target=innerEM, args=(likeMatrix, f, chunk, N, newF)) for chunk in S]
 	for thread in threads:
 		thread.start()
@@ -42,7 +42,7 @@ def innerEM(likeMatrix, f, S, N, newF):
 		newF[s] /= m
 
 # EM algorithm for estimation of population allele frequencies
-def alleleEM(likeMatrix, EM=200, EM_tole=5e-5, threads=1):
+def alleleEM(likeMatrix, EM=200, EM_tole=1e-4, threads=1):
 	m, n = likeMatrix.shape
 	m /= 3
 	f = np.ones(n)*0.25 # Uniform initialization

@@ -8,7 +8,7 @@ Simple estimator of the per-site inbreeding coefficients. A likelihood ratio tes
 __author__ = "Jonas Meisner"
 
 # Import help functions
-from helpFunctions import *
+from helpFunctions import rmse1d
 
 # Import libraries
 import numpy as np
@@ -56,7 +56,7 @@ def loglike(likeMatrix, indf, F, logAlt, logNull):
 			likeAlt[2, s] = likeMatrix[3*ind + 2, s]*(indf[ind, s]*indf[ind, s] + (1 - indf[ind, s])*indf[ind, s]*F[s])
 
 			for g in xrange(3):
-				likeAlt[g, s] = max(0.0001, likeAlt[g, s])
+				likeAlt[g, s] = max(1e-4, likeAlt[g, s])
 			logAlt[s] += np.log(np.sum(likeAlt[:, s]))
 
 			# Null model
@@ -82,7 +82,6 @@ def inbreedSitesEM(likeMatrix, indf, EM=200, EM_tole=1e-4):
 		if updateDiff < EM_tole:
 			print "EM (Inbreeding - sites) converged at iteration: " + str(iteration)
 			break
-
 		F_prev = np.copy(F)
 
 	# LRT test statistic

@@ -1,17 +1,17 @@
 """
 Estimates the covariance matrix for NGS data using the PCAngsd method,
-by estimating individual allele frequencies based on PCA.
+by estimating individual allele frequencies based on SVD.
 """
 
 __author__ = "Jonas Meisner"
 
 # Import libraries
 import numpy as np
-from numba import jit
-from scipy.sparse.linalg import svds, eigsh
 import threading
+from numba import jit
+from scipy.sparse.linalg import svds
 from math import sqrt
-from helpFunctions import *
+from helpFunctions import rmse2d_float32
 
 ##### Functions #####
 # Update posterior expectations of the genotypes (Fumagalli method)
@@ -19,8 +19,8 @@ from helpFunctions import *
 def updateFumagalli(likeMatrix, f, S, N, expG):
 	m, n = likeMatrix.shape # Dimension of likelihood matrix
 	m /= 3 # Number of individuals
-	probMatrix = np.zeros((3, n), dtype=np.float32)
-	
+	probMatrix = np.empty((3, n), dtype=np.float32)
+
 	# Loop over individuals
 	for ind in xrange(S, min(S+N, m)):
 		# Estimate posterior probabilities
@@ -42,7 +42,7 @@ def covFumagalli(likeMatrix, f, S, N, expG, diagC):
 	m, n = likeMatrix.shape # Dimension of likelihood matrix
 	m /= 3 # Number of individuals
 	probMatrix = np.zeros((3, n), dtype=np.float32)
-	
+
 	# Loop over individuals
 	for ind in xrange(S, min(S+N, m)):
 		# Estimate posterior probabilities
@@ -68,7 +68,7 @@ def covFumagalli(likeMatrix, f, S, N, expG, diagC):
 def updatePCAngsd(likeMatrix, indF, S, N, expG):
 	m, n = likeMatrix.shape # Dimension of likelihood matrix
 	m /= 3 # Number of individuals
-	probMatrix = np.zeros((3, n), dtype=np.float32)
+	probMatrix = np.empty((3, n), dtype=np.float32)
 
 	# Loop over individuals
 	for ind in xrange(S, min(S+N, m)):
@@ -90,7 +90,7 @@ def updatePCAngsd(likeMatrix, indF, S, N, expG):
 def covPCAngsd(likeMatrix, indF, f, S, N, expG, diagC):
 	m, n = likeMatrix.shape # Dimension of likelihood matrix
 	m /= 3 # Number of individuals
-	probMatrix = np.zeros((3, n), dtype=np.float32)
+	probMatrix = np.empty((3, n), dtype=np.float32)
 
 	for ind in xrange(S, min(S+N, m)):
 		# Estimate posterior probabilities
@@ -122,7 +122,7 @@ def normalizeGeno(expG, f, S, N, X):
 # Estimate covariance matrix
 def estimateCov(expG, diagC, f, chunks, chunk_N):
 	m, n = expG.shape
-	X = np.zeros((m, n))
+	X = np.empty((m, n))
 
 	# Multithreading
 	threads = [threading.Thread(target=normalizeGeno, args=(expG, f, chunk, chunk_N, X)) for chunk in chunks]
@@ -130,7 +130,7 @@ def estimateCov(expG, diagC, f, chunks, chunk_N):
 		thread.start()
 	for thread in threads:
 		thread.join()
-	
+
 	C = np.dot(X, X.T)/n
 	np.fill_diagonal(C, diagC)
 	return C
@@ -156,8 +156,6 @@ def addIntercept(indF, f, S, N):
 
 # Estimate individual allele frequencies
 def estimateF(expG, f, e, chunks, chunk_N):
-	m, n = expG.shape
-
 	# Multithreading - Centering genotype dosages
 	threads = [threading.Thread(target=expGcenter, args=(expG, f, chunk, chunk_N)) for chunk in chunks]
 	for thread in threads:
@@ -166,8 +164,8 @@ def estimateF(expG, f, e, chunks, chunk_N):
 		thread.join()
 
 	# Reduced SVD of rank K (Scipy library)
-	V, s, U = svds(expG, k=e)
-	F = np.dot(V*s, U)
+	W, s, U = svds(expG, k=e)
+	F = np.dot(W*s, U)
 
 	# Multithreading - Adding intercept and clipping
 	threads = [threading.Thread(target=addIntercept, args=(F, f, chunk, chunk_N)) for chunk in chunks]
@@ -176,20 +174,22 @@ def estimateF(expG, f, e, chunks, chunk_N):
 	for thread in threads:
 		thread.join()
 
-	return F
+	return F, W
 
 
 ##### PCAngsd #####
-def PCAngsd(likeMatrix, EVs, M, f, M_tole=5e-5, threads=1):
+def PCAngsd(likeMatrix, EVs, M, f, M_tole, threads=1):
 	m, n = likeMatrix.shape # Dimension of likelihood matrix
 	m /= 3 # Number of individuals
 	e = EVs
+
+	# Multithreading parameters
 	chunk_N = int(np.ceil(float(m)/threads))
 	chunks = [i * chunk_N for i in xrange(threads)]
 
 	# Initiate matrices
-	expG = np.zeros((m, n), dtype=np.float32)
-	diagC = np.zeros(m)
+	expG = np.empty((m, n), dtype=np.float32)
+	diagC = np.empty(m)
 
 	# Estimate covariance matrix (Fumagalli) and infer number of PCs
 	if EVs == 0:
@@ -206,17 +206,17 @@ def PCAngsd(likeMatrix, EVs, M, f, M_tole=5e-5, threads=1):
 			print "Returning with ngsTools covariance matrix!"
 			return C, None, e, expG
 
-		# Velicer's Minimum Average Partial (MAP) Test 
-		eigVals, eigVecs = eigsh(C, k=20) # Eigendecomposition (Symmetric)
+		# Velicer's Minimum Average Partial (MAP) Test
+		eigVals, eigVecs = np.linalg.eigh(C) # Eigendecomposition (Symmetric)
 		sort = np.argsort(eigVals)[::-1] # Sorting vector
 		eigVals = eigVals[sort] # Sorted eigenvalues
 		eigVals[eigVals < 0] = 0
 		eigVecs = eigVecs[:, sort] # Sorted eigenvectors
-		loadings = np.dot(eigVecs, np.diagflat(np.sqrt(eigVals)))
-		mapTest = np.zeros(eigVals.shape[0])
+		loadings = eigVecs*np.sqrt(eigVals)
+		mapTest = np.empty(20)
 
 		# Loop over m-1 eigenvalues for MAP test
-		for eig in xrange(eigVals.shape[0]):
+		for eig in xrange(20):
 			partcov = C - (np.dot(loadings[:, 0:(eig + 1)], loadings[:, 0:(eig + 1)].T))
 			d = np.diag(partcov)
 
@@ -229,13 +229,13 @@ def PCAngsd(likeMatrix, EVs, M, f, M_tole=5e-5, threads=1):
 
 		e = max([1, np.argmin(mapTest) + 1]) # Number of principal components retained
 		print "Using " + str(e) + " principal components (MAP test)"
-		
+
 		# Release memory
 		del eigVals, eigVecs, loadings, partcov, mapTest
-	
+
 	else:
 		print "Using " + str(e) + " principal components (manually selected)"
-		
+
 		# Multithreading
 		threads = [threading.Thread(target=updateFumagalli, args=(likeMatrix, f, chunk, chunk_N, expG)) for chunk in chunks]
 		for thread in threads:
@@ -244,12 +244,12 @@ def PCAngsd(likeMatrix, EVs, M, f, M_tole=5e-5, threads=1):
 			thread.join()
 
 	# Estimate individual allele frequencies
-	predF = estimateF(expG, f, e, chunks, chunk_N)
-	prevF = np.copy(predF)
+	predF, W = estimateF(expG, f, e, chunks, chunk_N)
+	prevW = np.copy(W)
 	print "Individual allele frequencies estimated (1)"
-	
+
 	# Iterative covariance estimation
-	for iteration in xrange(2, M+2):
+	for iteration in xrange(2, M+1):
 		# Multithreading
 		threads = [threading.Thread(target=updatePCAngsd, args=(likeMatrix, predF, chunk, chunk_N, expG)) for chunk in chunks]
 		for thread in threads:
@@ -258,26 +258,24 @@ def PCAngsd(likeMatrix, EVs, M, f, M_tole=5e-5, threads=1):
 			thread.join()
 
 		# Estimate individual allele frequencies
-		predF = estimateF(expG, f, e, chunks, chunk_N)
+		predF, W = estimateF(expG, f, e, chunks, chunk_N)
 
 		# Break iterative update if converged
-		diff = rmse2d_multi_float32(predF, prevF, chunks, chunk_N)
+		diff = rmse2d_float32(np.absolute(W), np.absolute(prevW))
 		print "Individual allele frequencies estimated (" + str(iteration) + "). RMSD=" + str(diff)
 		if diff < M_tole:
 			print "Estimation of individual allele frequencies has converged."
 			break
-		# Second convergence criterion
 		if iteration == 2:
 			oldDiff = diff
 		else:
-			if abs(diff - oldDiff) <= 5e-6:
-				print "Estimation of individual allele frequencies has converged. Change in RMSD between iterations: " + str(abs(diff - oldDiff))
+			res = abs(diff - oldDiff)
+			if res < 1e-7:
+				print "Estimation of individual allele frequencies has converged due to small change in differences: " + str(res)
 				break
-			else:
-				oldDiff = diff
+			oldDiff = diff
+		prevW = np.copy(W)
 
-		prevF = np.copy(predF)
-		
 	# Multithreading
 	threads = [threading.Thread(target=covPCAngsd, args=(likeMatrix, predF, f, chunk, chunk_N, expG, diagC)) for chunk in chunks]
 	for thread in threads:

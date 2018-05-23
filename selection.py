@@ -9,7 +9,7 @@ __author__ = "Jonas Meisner"
 
 # Import libraries
 import numpy as np
-import scipy.stats as stats
+from math import sqrt
 from numba import jit
 import threading
 
@@ -19,7 +19,7 @@ def normalizeGeno(expG, f, S, N, X):
 	m, n = expG.shape
 	for ind in xrange(S, min(S+N, m)):
 		for s in xrange(n):
-			X[ind, s] = (expG[ind, s] - 2*f[s])/np.sqrt(2*f[s]*(1 - f[s]))
+			X[ind, s] = (expG[ind, s] - 2*f[s])/sqrt(2*f[s]*(1 - f[s]))
 
 # Selection scan
 def selectionScan(expG, f, C, nEV, model=1, threads=1):
@@ -34,7 +34,7 @@ def selectionScan(expG, f, C, nEV, model=1, threads=1):
 	chunks = [i * chunk_N for i in xrange(threads)]
 
 	if model==1: # FastPCA
-		X = np.zeros((m, n))
+		X = np.empty((m, n))
 
 		# Multithreading
 		threads = [threading.Thread(target=normalizeGeno, args=(expG, f, chunk, chunk_N, X)) for chunk in chunks]
@@ -42,7 +42,7 @@ def selectionScan(expG, f, C, nEV, model=1, threads=1):
 			thread.start()
 		for thread in threads:
 			thread.join()
-		
+
 		# Test statistic container
 		test = np.zeros((nEV, n))
 

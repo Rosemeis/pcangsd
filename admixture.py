@@ -6,33 +6,33 @@ __author__ = "Jonas Meisner"
 
 # Import libraries
 import numpy as np
+import threading
 from numba import jit
-from helpFunctions import *
+from helpFunctions import frobenius, frobenius2d_multi, rmse2d_float32
 from math import log
-from scipy.sparse.linalg import svds
 
 ##### Functions #####
 # Estimate log likelihood of ngsAdmix model (inner)
-@jit("void(f4[:, :], f8[:, :], i8, i8, f8[:])", nopython=True, nogil=True, cache=True)
-def logLike_admixInner(likeMatrix, X, S, N, L):
+@jit("void(f4[:, :], f4[:, :], i8, i8, f8[:])", nopython=True, nogil=True, cache=True)
+def logLike_admixInner(likeMatrix, Pi, S, N, L):
 	m, n = likeMatrix.shape
 	m /= 3
 	temp = np.empty(3) # Container for each genotype
 	for ind in xrange(S, min(S+N, m)):
 		for s in xrange(n):
-			temp[0] = likeMatrix[3*ind, s]*(1 - X[ind, s])*(1 - X[ind, s])
-			temp[1] = likeMatrix[3*ind+1, s]*2*X[ind, s]*(1 - X[ind, s])
-			temp[2] = likeMatrix[3*ind+2, s]*X[ind, s]*X[ind, s]
+			temp[0] = likeMatrix[3*ind, s]*(1 - Pi[ind, s])*(1 - Pi[ind, s])
+			temp[1] = likeMatrix[3*ind+1, s]*2*Pi[ind, s]*(1 - Pi[ind, s])
+			temp[2] = likeMatrix[3*ind+2, s]*Pi[ind, s]*Pi[ind, s]
 			L[ind] += log(np.sum(temp))
 
 # Estimate log likelihood of ngsAdmix model (outer)
-def logLike_admix(likeMatrix, X, chunks, chunk_N):
+def logLike_admix(likeMatrix, Pi, chunks, chunk_N):
 	m, n = likeMatrix.shape
 	m /= 3
 	logLike_inds = np.zeros(m) # Log-likelihood container for each individual
 
 	# Multithreading
-	threads = [threading.Thread(target=logLike_admixInner, args=(likeMatrix, X, chunk, chunk_N, logLike_inds)) for chunk in chunks]
+	threads = [threading.Thread(target=logLike_admixInner, args=(likeMatrix, Pi, chunk, chunk_N, logLike_inds)) for chunk in chunks]
 	for thread in threads:
 		thread.start()
 	for thread in threads:
@@ -41,7 +41,7 @@ def logLike_admix(likeMatrix, X, chunks, chunk_N):
 	return np.sum(logLike_inds)
 
 # Update factor matrices
-@jit("void(f8[:, :], f8[:, :], f8[:, :])", nopython=True, nogil=True, cache=True)
+@jit("void(f4[:, :], f4[:, :], f4[:, :])", nopython=True, nogil=True, cache=True)
 def updateF(F, A, FB):
 	n, K = F.shape
 	for s in xrange(n):
@@ -50,7 +50,7 @@ def updateF(F, A, FB):
 			F[s, k] = max(F[s, k], 1e-4)
 			F[s, k] = min(F[s, k], 1-(1e-4))
 
-@jit("void(f8[:, :], f8[:, :], f8[:, :], f8)", nopython=True, nogil=True, cache=True)
+@jit("void(f4[:, :], f4[:, :], f4[:, :], f8)", nopython=True, nogil=True, cache=True)
 def updateQ(Q, A, QB, alpha):
 	m, K = Q.shape
 	for i in xrange(m):
@@ -58,7 +58,6 @@ def updateQ(Q, A, QB, alpha):
 			Q[i, k] *= A[i, k]/(QB[i, k] + alpha)
 			Q[i, k] = max(Q[i, k], 1e-4)
 			Q[i, k] = min(Q[i, k], 1-(1e-4))
-
 
 # Estimate admixture using non-negative matrix factorization
 def admixNMF(X, K, likeMatrix, alpha=0, iter=100, tole=5e-5, seed=0, batch=5, threads=1):
@@ -70,12 +69,13 @@ def admixNMF(X, K, likeMatrix, alpha=0, iter=100, tole=5e-5, seed=0, batch=5, th
 	X = X[:, shuffleX]
 
 	# Initiate matrices
-	Q = np.random.rand(m, K)
+	Q = np.random.rand(m, K).astype(np.float32, copy=False)
 	Q /= np.sum(Q, axis=1, keepdims=True)
-	prevQ = np.copy(Q)
 	F = np.dot(np.linalg.inv(np.dot(Q.T, Q)), np.dot(Q.T, X)).T
+	F.clip(min=1e-4, max=1-(1e-4), out=F)
+	prevQ = np.copy(Q)
 
-	# Multithreading
+	# Multithreading parameters
 	chunk_N = int(np.ceil(float(m)/threads))
 	chunks = [i * chunk_N for i in xrange(threads)]
 
@@ -86,7 +86,6 @@ def admixNMF(X, K, likeMatrix, alpha=0, iter=100, tole=5e-5, seed=0, batch=5, th
 	# ASG-MU
 	for iteration in xrange(1, iter + 1):
 		perm = np.random.permutation(batch)
-
 		for b in bIndex[perm]:
 			bEnd = min(b + batch_N, n)
 			Xbatch = X[:, b:bEnd]
@@ -100,13 +99,13 @@ def admixNMF(X, K, likeMatrix, alpha=0, iter=100, tole=5e-5, seed=0, batch=5, th
 			for inner in xrange(pF): # Acceleration updates
 				F_prev = np.copy(F[b:bEnd])
 				updateF(F[b:bEnd], A, np.dot(F[b:bEnd], B))
-				
+
 				if inner == 0:
 					F_init = frobenius(F[b:bEnd], F_prev)
 				else:
 					if (frobenius(F[b:bEnd], F_prev) <= (0.1*F_init)):
 						break
-			
+
 			# Update Q
 			A = np.dot(Xbatch, F[b:bEnd])
 			B = np.dot(F[b:bEnd].T, F[b:bEnd])
@@ -122,33 +121,33 @@ def admixNMF(X, K, likeMatrix, alpha=0, iter=100, tole=5e-5, seed=0, batch=5, th
 						break
 
 		# Measure difference
-		diff = rmse2d_multi(Q, prevQ, chunks, chunk_N)
+		diff = rmse2d_float32(Q, prevQ)
 		print "ASG-MU (" + str(iteration) + "). Q-RMSD=" + str(diff)
-		
+
 		if diff < tole:
 			print "ASG-MU has converged. Running full iterations."
 			break
 		prevQ = np.copy(Q)
 
-	del perm
+	del perm, prevQ
 
 	# Full iterations
 	pF = 2*(1 + (m*n + m*K)/(n*K + n))
 	pQ = 2*(1 + (m*n + n*K)/(m*K + m))
-	for full_iter in xrange(1, 11):
+	for f_iteration in xrange(5):
 		# Update F
 		A = np.dot(X.T, Q)
 		B = np.dot(Q.T, Q)
 		for inner in xrange(pF): # Acceleration updates
 			F_prev = np.copy(F)
 			updateF(F, A, np.dot(F, B))
-			
+
 			if inner == 0:
 				F_init = frobenius(F, F_prev)
 			else:
 				if (frobenius(F, F_prev) <= (0.1*F_init)):
 					break
-		
+
 		# Update Q
 		A = np.dot(X, F)
 		B = np.dot(F.T, F)
@@ -163,26 +162,18 @@ def admixNMF(X, K, likeMatrix, alpha=0, iter=100, tole=5e-5, seed=0, batch=5, th
 				if (frobenius(Q, Q_prev) <= (0.1*Q_init)):
 					break
 
-		# Measure difference
-		diff = rmse2d_multi(Q, prevQ, chunks, chunk_N)
-		print "Full-MU (" + str(full_iter + iteration) + "). Q-RMSD=" + str(diff)
-		
-		if diff < 1e-5:
-			print "Admixture estimation has converged."
-			break
-		prevQ = np.copy(Q)
-	
-	del A, B, F_prev, Q_prev, prevQ
-	
-	# Reshuffle
+	del A, B, F_prev, Q_prev
+
+	# Reshuffle columns
 	F = F[np.argsort(shuffleX)]
 	X = X[:, np.argsort(shuffleX)]
-	
+
 	# Frobenius and log-like
-	Xhat = np.dot(Q, F.T)
-	Obj = frobenius2d_multi(X, Xhat, chunks, chunk_N)
+	Pi = np.dot(Q, F.T) # Individual allele frequencies from admixture estimates
+	Pi.clip(min=1e-4, max=1-(1e-4), out=Pi)
+	Obj = frobenius2d_multi(X, Pi, chunks, chunk_N)
 	print "Frobenius error: " + str(Obj)
 
-	logLike = logLike_admix(likeMatrix, Xhat, chunks, chunk_N) # Log-likelihood (ngsAdmix model)
+	logLike = logLike_admix(likeMatrix, Pi, chunks, chunk_N) # Log-likelihood (ngsAdmix model)
 	print "Log-likelihood: " + str(logLike)
 	return Q, F

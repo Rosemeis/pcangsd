@@ -12,7 +12,7 @@ import threading
 
 ##### Functions #####
 # Genotype calling without inbreeding
-@jit("void(f4[:, :], f4[:, :], f8, i8, i8, u1[:, :])", nopython=True, nogil=True, cache=True)
+@jit("void(f4[:, :], f4[:, :], f8, i8, i8, i1[:, :])", nopython=True, nogil=True, cache=True)
 def gProbGeno(likeMatrix, indF, delta, S, N, G):
 	m, n = likeMatrix.shape # Dimension of likelihood matrix
 	m /= 3 # Number of individuals
@@ -24,18 +24,17 @@ def gProbGeno(likeMatrix, indF, delta, S, N, G):
 			probMatrix[0, s] = likeMatrix[3*ind, s]*((1 - indF[ind, s])*(1 - indF[ind, s]))
 			probMatrix[1, s] = likeMatrix[3*ind+1, s]*(2*indF[ind, s]*(1 - indF[ind, s]))
 			probMatrix[2, s] = likeMatrix[3*ind+2, s]*(indF[ind, s]*indF[ind, s])
-		probMatrix /= np.sum(probMatrix, axis=0)
 
 		# Find genotypes with highest probability
 		for s in xrange(n):
 			geno = np.argmax(probMatrix[:, s])
 			if probMatrix[geno, s] < delta:
-				G[ind, s] = 9
+				G[ind, s] = -9
 			else:
 				G[ind, s] = geno
 
 # Genotype calling with inbreeding
-@jit("void(f4[:, :], f4[:, :], f4[:], f8, i8, i8, u1[:, :])", nopython=True, nogil=True, cache=True)
+@jit("void(f4[:, :], f4[:, :], f4[:], f8, i8, i8, i1[:, :])", nopython=True, nogil=True, cache=True)
 def gProbGenoInbreeding(likeMatrix, indF, F, delta, S, N, G):
 	m, n = likeMatrix.shape # Dimension of likelihood matrix
 	m /= 3 # Number of individuals
@@ -47,13 +46,12 @@ def gProbGenoInbreeding(likeMatrix, indF, F, delta, S, N, G):
 			probMatrix[0, s] = likeMatrix[3*ind, s]*((1 - indF[ind, s])*(1 - indF[ind, s]) + indF[ind, s]*(1 - indF[ind, s])*F[ind])
 			probMatrix[1, s] = likeMatrix[3*ind+1, s]*(2*indF[ind, s]*(1 - indF[ind, s])*(1 - F[ind]))
 			probMatrix[2, s] = likeMatrix[3*ind+2, s]*(indF[ind, s]*indF[ind, s] + indF[ind, S]*(1 - indF[ind, S])*F[ind])
-		probMatrix /= np.sum(probMatrix, axis=0)
 
 		# Find genotypes with highest probability
 		for s in xrange(n):
 			geno = np.argmax(probMatrix[:, s])
 			if probMatrix[geno, s] < delta:
-				G[ind, s] = 9
+				G[ind, s] = -9
 			else:
 				G[ind, s] = geno
 
@@ -66,7 +64,7 @@ def callGeno(likeMatrix, indF, F=None, delta=0.0, threads=1):
 	chunks = [i * chunk_N for i in xrange(threads)]
 
 	# Initiate genotype matrix
-	G = np.empty((m, n), dtype=np.uint8)
+	G = np.empty((m, n), dtype=np.int8)
 
 	# Call genotypes with highest posterior probabilities
 	if type(F) != type(None):
