@@ -24,7 +24,7 @@ import os.path
 
 ##### Argparse #####
 parser = argparse.ArgumentParser(prog="PCAngsd")
-parser.add_argument("--version", action="version", version="%(prog)s 0.91")
+parser.add_argument("--version", action="version", version="%(prog)s 0.92")
 parser.add_argument("-beagle", metavar="FILE",
 	help="Input file of genotype likelihoods in Beagle format (.gz)")
 parser.add_argument("-indf", metavar="FILE",
@@ -63,6 +63,8 @@ parser.add_argument("-HWE_tole", metavar="FLOAT", type=float, default=1e-6,
 	help="Threshold in HWE test (1e-6)")
 parser.add_argument("-selection", metavar="INT", type=int,
 	help="Perform selection scan using the top principal components by specified model")
+parser.add_argument("-altC", metavar="FILE",
+	help="Input file for alternative covariance matrix to use in selection scan")
 parser.add_argument("-kinship", action="store_true",
 	help="Estimate the kinship matrix")
 parser.add_argument("-admix", action="store_true",
@@ -92,7 +94,7 @@ parser.add_argument("-threads", metavar="INT", type=int, default=1,
 parser.add_argument("-o", metavar="OUTPUT", help="Prefix output file name", default="pcangsd")
 args = parser.parse_args()
 
-print "PCAngsd 0.91"
+print "PCAngsd 0.92"
 print "Using " + str(args.threads) + " thread(s)"
 
 # Setting up workflow parameters
@@ -187,7 +189,16 @@ if args.selection != None:
 		for thread in threads:
 			thread.join()
 
-		C = estimateCov(expG, diagC, f, chunks, chunk_N)
+		if args.altC == None:
+			C = estimateCov(expG, diagC, f, chunks, chunk_N)
+		del diagC
+
+	# Parse alternative covariance matrix if given
+	if args.altC != None:
+		print "Parsing alternative covariance matrix"
+		C = pd.read_csv(args.altC, sep="\t", header=None, dtype=np.float).as_matrix()
+		assert (m == C.shape[0]), "Number of individuals must match for alternative covariance matrix!"
+
 
 	if args.selection == 1:
 		print "\n" + "Performing selection scan using FastPCA method"
@@ -211,22 +222,25 @@ if args.selection != None:
 		# Release memory
 		del mahalanobisDF
 
-if args.expg_save:
-	np.save(str(args.o) + ".expg", expG)
-	print "Saved genotype dosages as " + str(args.o) + ".expg.npy (Binary)"
-
-if (args.indf == None) or (args.selection != None):
-	del C, expG
-
 
 ##### Kinship estimation #####
 if param_kinship:
 	print "\n" + "Estimating kinship matrix"
 
 	# Perform kinship estimation
-	phi = kinshipConomos(likeMatrix, indf)
+	phi = kinshipConomos(likeMatrix, indf, expG, args.threads)
 	pd.DataFrame(phi).to_csv(str(args.o) + ".kinship", sep="\t", header=False, index=False)
 	print "Saved kinship matrix as " + str(args.o) + ".kinship"
+
+
+# Optional save of genotype dosages
+if args.expg_save:
+	np.save(str(args.o) + ".expg", expG)
+	print "Saved genotype dosages as " + str(args.o) + ".expg.npy (Binary)"
+
+# Release memory
+if (args.indf == None) or (args.selection != None):
+	del C, expG
 
 
 ##### Individual inbreeding coefficients #####

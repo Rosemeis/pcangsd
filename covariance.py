@@ -9,7 +9,7 @@ __author__ = "Jonas Meisner"
 import numpy as np
 import threading
 from numba import jit
-from scipy.sparse.linalg import svds
+from scipy.sparse.linalg import svds, eigsh
 from math import sqrt
 from helpFunctions import rmse2d_float32
 
@@ -207,7 +207,7 @@ def PCAngsd(likeMatrix, EVs, M, f, M_tole, threads=1):
 			return C, None, e, expG
 
 		# Velicer's Minimum Average Partial (MAP) Test
-		eigVals, eigVecs = np.linalg.eigh(C) # Eigendecomposition (Symmetric)
+		eigVals, eigVecs = eigsh(C, k=20) # Eigendecomposition (Symmetric)
 		sort = np.argsort(eigVals)[::-1] # Sorting vector
 		eigVals = eigVals[sort] # Sorted eigenvalues
 		eigVals[eigVals < 0] = 0
@@ -270,7 +270,7 @@ def PCAngsd(likeMatrix, EVs, M, f, M_tole, threads=1):
 			oldDiff = diff
 		else:
 			res = abs(diff - oldDiff)
-			if res < 1e-7:
+			if res < 5e-7:
 				print "Estimation of individual allele frequencies has converged due to small change in differences: " + str(res)
 				break
 			oldDiff = diff

@@ -1,6 +1,6 @@
 # PCAngsd
 
-**Version 0.9** 
+**Version 0.92** 
 *PCAngsd now supports PLINK files!*
 
 Framework for analyzing low depth next-generation sequencing (NGS) data in heterogeneous populations using principal component analysis (PCA). Population structure is inferred to detect the number of significant principal components which is used to estimate individual allele frequencies using genotype dosages in a SVD model. The estimated individual allele frequencies are then used in an probabilistic framework to update the genotype dosages such that an updated set of individual allele frequencies can be estimated iteratively based on inferred population structure. A covariance matrix can be estimated using the updated prior information of the estimated individual allele frequencies.
@@ -38,4 +38,8 @@ python pcangsd.py -h
 ```
 
 The only input PCAngsd needs is estimated genotype likelihoods in Beagle format. These can be estimated using [ANGSD](https://github.com/ANGSD/angsd).
-New functionality for using PLINK files has been added (version 0.9). Genotypes are automatically converted into a genotype likelihood matrix. 
+New functionality for using PLINK files has been added (version 0.9). Genotypes are automatically converted into a genotype likelihood matrix.
+
+
+## Preprint
+Inferring Population Structure and Admixture Proportions in Low Depth NGS Data - [bioRxiv.org](https://www.biorxiv.org/content/early/2018/05/23/302463).
