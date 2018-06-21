@@ -12,69 +12,80 @@ from helpFunctions import rmse1d
 
 # Import libraries
 import numpy as np
+import threading
 from numba import jit
 from math import log
 
 # Inner update
-@jit("void(f4[:, :], f4[:, :], f8[:])", nopython=True, nogil=True, cache=True)
-def innerEM(likeMatrix, indf, F):
-	m, n = likeMatrix.shape # Dimension of likelihood matrix
-	m /= 3 # Number of individuals
-	probMatrix = np.zeros((3, n))
-	expG = np.zeros(n) # Container for posterior probability of heterozygosity
-	expH = np.zeros(n) # Container for expected heterozygosity
+@jit("void(f4[:, :], f4[:, :], i8, i8, f8[:])", nopython=True, nogil=True, cache=True)
+def innerEM(likeMatrix, indF, S, N, F):
+	m, n = indF.shape # Dimensions
+	probMatrix = np.empty((3, m)) # Container for posterior probabilities
 
-	for ind in xrange(m):
+	for s in xrange(S, min(S+N, n)):
+		expH = 0
+
 		# Estimate posterior probabilities
-		for s in xrange(n):
-			probMatrix[0, s] = likeMatrix[3*ind, s]*((1 - indf[ind, s])*(1 - indf[ind, s]) + (1 - indf[ind, s])*indf[ind, s]*F[s])
-			probMatrix[1, s] = likeMatrix[3*ind + 1, s]*2*indf[ind, s]*(1 - indf[ind, s])*(1 - F[s])
-			probMatrix[2, s] = likeMatrix[3*ind + 2, s]*(indf[ind, s]*indf[ind, s] + (1 - indf[ind, s])*indf[ind, s]*F[s])
-			expH[s] += 2*indf[ind, s]*(1 - indf[ind, s]) # Expected number of heterozygotes
+		for ind in xrange(m):
+			probMatrix[0, ind] = max(0, likeMatrix[3*ind, s]*((1 - indF[ind, s])*(1 - indF[ind, s]) + (1 - indF[ind, s])*indF[ind, s]*F[s]))
+			probMatrix[1, ind] = max(0, likeMatrix[3*ind + 1, s]*2*indF[ind, s]*(1 - indF[ind, s])*(1 - F[s]))
+			probMatrix[2, ind] = max(0, likeMatrix[3*ind + 2, s]*(indF[ind, s]*indF[ind, s] + (1 - indF[ind, s])*indF[ind, s]*F[s]))
+			sumNorm = np.sum(probMatrix[:, ind])
 
-			for g in xrange(3):
-				probMatrix[g, s] = max(0.0001, probMatrix[g, s])
-		probMatrix /= np.sum(probMatrix, axis=0)
-		expG += probMatrix[1, :] # Sum the posterior of each individual
+			# Normalize posteriors
+			if sumNorm > 0:
+				probMatrix[1, ind] /= sumNorm
+			probMatrix[1, ind] = max(1e-4, probMatrix[1, ind]) # Fix lower boundary
 
-	for s in xrange(n):
-		F[s] = 1 - (expG[s]/expH[s])
+			# Expected number of heterozygotes
+			expH += 2*indF[ind, s]*(1 - indF[ind, s])
+		
+		# Update the inbreeding coefficient
+		F[s] = 1 - (np.sum(probMatrix[1, :])/expH)
+
 
 # Loglikelihood estimates
-@jit("void(f4[:, :], f4[:, :], f8[:], f8[:], f8[:])", nopython=True, nogil=True, cache=True)
-def loglike(likeMatrix, indf, F, logAlt, logNull):
-	m, n = likeMatrix.shape # Dimension of likelihood matrix
-	m /= 3 # Number of individuals
-	likeAlt = np.zeros((3, n))
-	likeNull = np.zeros((3, n))
+@jit("void(f4[:, :], f4[:, :], f8[:], i8, i8, f8[:], f8[:])", nopython=True, nogil=True, cache=True)
+def loglike(likeMatrix, indF, F, S, N, logAlt, logNull):
+	m, n = indF.shape # Dimensions
+	likeAlt = np.zeros(3)
+	likeNull = np.zeros(3)
 
-	for ind in xrange(m):
-		for s in xrange(n):
+	for s in xrange(S, min(S+N, n)):
+		for ind in xrange(m):
 			# Alternative model
-			likeAlt[0, s] = likeMatrix[3*ind, s]*((1 - indf[ind, s])*(1 - indf[ind, s]) + (1 - indf[ind, s])*indf[ind, s]*F[s])
-			likeAlt[1, s] = likeMatrix[3*ind + 1, s]*(2*indf[ind, s]*(1 - indf[ind, s])*(1 - F[s]))
-			likeAlt[2, s] = likeMatrix[3*ind + 2, s]*(indf[ind, s]*indf[ind, s] + (1 - indf[ind, s])*indf[ind, s]*F[s])
+			likeAlt[0] = max(0, likeMatrix[3*ind, s]*((1 - indF[ind, s])*(1 - indF[ind, s]) + (1 - indF[ind, s])*indF[ind, s]*F[s]))
+			likeAlt[1] = max(0, likeMatrix[3*ind + 1, s]*(2*indF[ind, s]*(1 - indF[ind, s])*(1 - F[s])))
+			likeAlt[2] = max(0, likeMatrix[3*ind + 2, s]*(indF[ind, s]*indF[ind, s] + (1 - indF[ind, s])*indF[ind, s]*F[s]))
+			sumAlt = np.sum(likeAlt)
 
-			for g in xrange(3):
-				likeAlt[g, s] = max(1e-4, likeAlt[g, s])
-			logAlt[s] += np.log(np.sum(likeAlt[:, s]))
+			if sumAlt > 0:
+				logAlt[s] += log(sumAlt)
 
 			# Null model
-			likeNull[0, s] = likeMatrix[3*ind, s]*(1 - indf[ind, s])*(1 - indf[ind, s])
-			likeNull[1, s] = likeMatrix[3*ind + 1, s]*2*indf[ind, s]*(1 - indf[ind, s])
-			likeNull[2, s] = likeMatrix[3*ind + 2, s]*indf[ind, s]*indf[ind, s]
-			logNull[s] += np.log(np.sum(likeNull[:, s]))
+			likeNull[0] = likeMatrix[3*ind, s]*(1 - indF[ind, s])*(1 - indF[ind, s])
+			likeNull[1] = likeMatrix[3*ind + 1, s]*2*indF[ind, s]*(1 - indF[ind, s])
+			likeNull[2] = likeMatrix[3*ind + 2, s]*indF[ind, s]*indF[ind, s]
+			logNull[s] += log(np.sum(likeNull))
 
 # EM algorithm for estimation of inbreeding coefficients
-def inbreedSitesEM(likeMatrix, indf, EM=200, EM_tole=1e-4):
-	m, n = likeMatrix.shape # Dimension of likelihood matrix
-	m /= 3 # Number of individuals
-	F = np.ones(n)*0.25 # Initialization of inbreeding coefficients
+def inbreedSitesEM(likeMatrix, indF, EM=200, EM_tole=1e-4, t=1):
+	m, n = indF.shape # Dimensions
+	F = np.ones(n)*0.05 # Initialization of inbreeding coefficients
 	F_prev = np.copy(F)
+
+	# Multithreading parameters
+	chunk_N = int(np.ceil(float(n)/t))
+	chunks = [i * chunk_N for i in xrange(t)]
 
 	# EM algorithm
 	for iteration in xrange(1, EM + 1):
-		innerEM(likeMatrix, indf, F) # Update F
+		# Multithreading - Update F
+		threads = [threading.Thread(target=innerEM, args=(likeMatrix, indF, chunk, chunk_N, F)) for chunk in chunks]
+		for thread in threads:
+			thread.start()
+		for thread in threads:
+			thread.join()
 
 		# Break EM update if converged
 		updateDiff = rmse1d(F, F_prev)
@@ -87,8 +98,14 @@ def inbreedSitesEM(likeMatrix, indf, EM=200, EM_tole=1e-4):
 	# LRT test statistic
 	logAlt = np.zeros(n)
 	logNull = np.zeros(n)
-	loglike(likeMatrix, indf, F, logAlt, logNull)
 
-	lrt = 2*(logAlt - logNull)
+	# Multithreading - Estimate log-likelihoods of two models
+	threads = [threading.Thread(target=loglike, args=(likeMatrix, indF, F, chunk, chunk_N, logAlt, logNull)) for chunk in chunks]
+	for thread in threads:
+		thread.start()
+	for thread in threads:
+		thread.join()
+
+	lrt = 2*logAlt - 2*logNull
 
 	return F, lrt

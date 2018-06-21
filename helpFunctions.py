@@ -19,7 +19,7 @@ def readGzipBeagle(beagle):
 			if c < 0:
 				c += 1
 				m3 = len(line.split("\t"))-3
-				likeMatrix = np.empty((m3, 30000000), dtype=np.float32)
+				likeMatrix = np.empty((m3, 15000000), dtype=np.float32)
 				continue
 			else:
 				likeMatrix[:, c] = line.split("\t")[3:]
@@ -159,9 +159,9 @@ def convertPlink(likeMatrix, G, S, N, epsilon):
 	for ind in xrange(S, min(S+N, m)):
 		for s in xrange(n):
 			if np.isnan(G[ind, s]): # Missing site
-				likeMatrix[3*ind, s] = 1.0
-				likeMatrix[3*ind+1, s] = 1.0
-				likeMatrix[3*ind+2, s] = 1.0
+				likeMatrix[3*ind, s] = 1.0/3.0
+				likeMatrix[3*ind+1, s] = 1.0/3.0
+				likeMatrix[3*ind+2, s] = 1.0/3.0
 			else:
 				for g in xrange(3):
 					if int(G[ind, s]) == g:

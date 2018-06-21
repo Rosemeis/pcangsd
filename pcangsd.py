@@ -297,7 +297,7 @@ if args.inbreedSites:
 	print "\n" + "Estimating per-site inbreeding coefficients using simple estimator (EM) and performing LRT"
 
 	# Estimating per-site inbreeding coefficients
-	Fsites, lrt = inbreedSitesEM(likeMatrix, indf, args.inbreed_iter, args.inbreed_tole)
+	Fsites, lrt = inbreedSitesEM(likeMatrix, indf, args.inbreed_iter, args.inbreed_tole, args.threads)
 
 	# Save data frames
 	pd.DataFrame(Fsites).to_csv(str(args.o) + ".inbreed.sites.gz", header=False, index=False, compression="gzip")

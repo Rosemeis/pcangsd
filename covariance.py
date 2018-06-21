@@ -207,16 +207,16 @@ def PCAngsd(likeMatrix, EVs, M, f, M_tole, threads=1):
 			return C, None, e, expG
 
 		# Velicer's Minimum Average Partial (MAP) Test
-		eigVals, eigVecs = eigsh(C, k=20) # Eigendecomposition (Symmetric)
+		eigVals, eigVecs = eigsh(C, k=15) # Eigendecomposition (Symmetric - Scipy library)
 		sort = np.argsort(eigVals)[::-1] # Sorting vector
 		eigVals = eigVals[sort] # Sorted eigenvalues
 		eigVals[eigVals < 0] = 0
 		eigVecs = eigVecs[:, sort] # Sorted eigenvectors
 		loadings = eigVecs*np.sqrt(eigVals)
-		mapTest = np.empty(20)
+		mapTest = np.empty(15)
 
-		# Loop over m-1 eigenvalues for MAP test
-		for eig in xrange(20):
+		# Loop over m-1 eigenvalues for MAP test (Shriner implementation)
+		for eig in xrange(15):
 			partcov = C - (np.dot(loadings[:, 0:(eig + 1)], loadings[:, 0:(eig + 1)].T))
 			d = np.diag(partcov)
 
