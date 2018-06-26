@@ -18,7 +18,7 @@ from math import log
 
 # Inner update
 @jit("void(f4[:, :], f4[:, :], i8, i8, f8[:])", nopython=True, nogil=True, cache=True)
-def innerEM(likeMatrix, indF, S, N, F):
+def inbreedSitesEM_inner(likeMatrix, indF, S, N, F):
 	m, n = indF.shape # Dimensions
 	probMatrix = np.empty((3, m)) # Container for posterior probabilities
 
@@ -42,7 +42,6 @@ def innerEM(likeMatrix, indF, S, N, F):
 		
 		# Update the inbreeding coefficient
 		F[s] = 1 - (np.sum(probMatrix[1, :])/expH)
-
 
 # Loglikelihood estimates
 @jit("void(f4[:, :], f4[:, :], f8[:], i8, i8, f8[:], f8[:])", nopython=True, nogil=True, cache=True)
@@ -71,7 +70,7 @@ def loglike(likeMatrix, indF, F, S, N, logAlt, logNull):
 # EM algorithm for estimation of inbreeding coefficients
 def inbreedSitesEM(likeMatrix, indF, EM=200, EM_tole=1e-4, t=1):
 	m, n = indF.shape # Dimensions
-	F = np.ones(n)*0.05 # Initialization of inbreeding coefficients
+	F = np.zeros(n) # Initialization of inbreeding coefficients
 	F_prev = np.copy(F)
 
 	# Multithreading parameters
@@ -81,7 +80,7 @@ def inbreedSitesEM(likeMatrix, indF, EM=200, EM_tole=1e-4, t=1):
 	# EM algorithm
 	for iteration in xrange(1, EM + 1):
 		# Multithreading - Update F
-		threads = [threading.Thread(target=innerEM, args=(likeMatrix, indF, chunk, chunk_N, F)) for chunk in chunks]
+		threads = [threading.Thread(target=inbreedSitesEM_inner, args=(likeMatrix, indF, chunk, chunk_N, F)) for chunk in chunks]
 		for thread in threads:
 			thread.start()
 		for thread in threads:

@@ -13,6 +13,7 @@ from emInbreedSites import *
 from kinship import *
 from selection import *
 from admixture import *
+from hweChi2 import *
 
 # Import libraries
 import warnings
@@ -24,7 +25,7 @@ import os.path
 
 ##### Argparse #####
 parser = argparse.ArgumentParser(prog="PCAngsd")
-parser.add_argument("--version", action="version", version="%(prog)s 0.92")
+parser.add_argument("--version", action="version", version="%(prog)s 0.93")
 parser.add_argument("-beagle", metavar="FILE",
 	help="Input file of genotype likelihoods in Beagle format (.gz)")
 parser.add_argument("-indf", metavar="FILE",
@@ -57,6 +58,8 @@ parser.add_argument("-inbreed_iter", metavar="INT", type=int, default=200,
 	help="Maximum iterations for inbreeding coefficients estimation - EM (200)")
 parser.add_argument("-inbreed_tole", metavar="FLOAT", type=float, default=1e-4,
 	help="Tolerance for inbreeding coefficients estimation update - EM (1e-4)")
+parser.add_argument("-hwe", action="store_true",
+	help="Test for HWE")
 parser.add_argument("-HWE_filter", metavar="FILE",
 	help="Input file of LRT values in sites from HWE test")
 parser.add_argument("-HWE_tole", metavar="FLOAT", type=float, default=1e-6,
@@ -73,7 +76,7 @@ parser.add_argument("-admix_alpha", metavar="FLOAT-LIST", type=float, nargs="+",
 	help="Sparseness parameter for NMF in estimation of admixture proportions")
 parser.add_argument("-admix_seed", metavar="INT-LIST", type=int, nargs="+", default=[None],
 	help="Random seed for admixture estimation")
-parser.add_argument("-admix_K", metavar="INT-LIST", type=int, nargs="+", default=[0],
+parser.add_argument("-admix_K", metavar="INT", type=int,
 	help="Number of ancestral population for admixture estimation")
 parser.add_argument("-admix_iter", metavar="INT", type=int, default=50,
 	help="Maximum iterations for admixture estimation - NMF (50)")
@@ -83,6 +86,10 @@ parser.add_argument("-admix_batch", metavar="INT", type=int, default=5,
 	help="Number of batches used for stochastic gradient descent (5)")
 parser.add_argument("-admix_save", action="store_true",
 	help="Save population-specific allele frequencies (Binary)")
+parser.add_argument("-admix_auto", metavar="FLOAT", type=float,
+	help="Automatic search for optimal alpha. Specify upper bound")
+parser.add_argument("-admix_depth", metavar="INT", type=int, default=5,
+	help="Depth of automatic search for alpha")
 parser.add_argument("-indf_save", action="store_true",
 	help="Save estimated allele frequencies (Binary)")
 parser.add_argument("-expg_save", action="store_true",
@@ -94,7 +101,7 @@ parser.add_argument("-threads", metavar="INT", type=int, default=1,
 parser.add_argument("-o", metavar="OUTPUT", help="Prefix output file name", default="pcangsd")
 args = parser.parse_args()
 
-print "PCAngsd 0.92"
+print "PCAngsd 0.93"
 print "Using " + str(args.threads) + " thread(s)"
 
 # Setting up workflow parameters
@@ -171,6 +178,17 @@ else:
 	print "\n" + "Parsing individual allele frequencies"
 	indf = np.load(args.indf)
 	nEV = args.e
+
+
+##### HWE test #####
+if args.hwe:
+	print "\n" + "Testing for HWE"
+	hwe = hweTest(likeMatrix, indf, args.threads)
+	pd.DataFrame(hwe).to_csv(str(args.o) + ".hwe", sep="\t", header=False, index=False)
+	print "Saved HWE test statistics as " + str(args.o) + ".hwe"
+
+	# Release memory
+	del hwe
 
 
 ##### Selection scan #####
@@ -337,22 +355,140 @@ elif args.genoInbreed != None:
 
 ##### Admixture proportions #####
 if args.admix:
-	if args.admix_K[0] == 0:
-		K_list = [nEV + 1]
+	if args.admix_K != None:
+		K = args.admix_K
 	else:
-		K_list = args.admix_K
+		K = nEV + 1
 
-	if args.admix_seed[0] == None:
+	# Automatic search for optimal alpha parameter
+	if args.admix_auto != None:
 		from time import time
 		S_list = [int(time())]
-	else:
-		S_list = args.admix_seed
+		
+		print "\n" + "Estimating admixture using automatic scan for optimal alpha. Scanning in range 0-" + str(args.admix_auto) + " with depth " + str(args.admix_depth)
+		print "NMF: K=" + str(K) + ", alpha=" + str(0) + ", batch=" + str(args.admix_batch) + " and seed=" + str(S_list[0])
+		Q1, F1, L1 = admixNMF(indf, K, likeMatrix, 0, args.admix_iter, args.admix_tole, S_list[0], args.admix_batch, args.threads)
+		print "\n" + "NMF: K=" + str(K) + ", alpha=" + str(args.admix_auto/2.0) + ", batch=" + str(args.admix_batch) + " and seed=" + str(S_list[0])
+		Q2, F2, L2 = admixNMF(indf, K, likeMatrix, args.admix_auto/2.0, args.admix_iter, args.admix_tole, S_list[0], args.admix_batch, args.threads)
+		print "\n" + "NMF: K=" + str(K) + ", alpha=" + str(args.admix_auto) + ", batch=" + str(args.admix_batch) + " and seed=" + str(S_list[0])
+		Q3, F3, L3 = admixNMF(indf, K, likeMatrix, args.admix_auto, args.admix_iter, args.admix_tole, S_list[0], args.admix_batch, args.threads)
+		
+		if (L1 > L2) & (L1 > L3):
+			Amin = 0
+			Amax = args.admix_auto/2.0
+			Abest = 0
+			Q_admix = np.copy(Q1)
+			F_admix = np.copy(F1)
+			Q3 = np.copy(Q2)
+			F3 = np.copy(F2)
+			L3 = L2
+		elif (L3 > L2):
+			Amin = args.admix_auto/2.0
+			Amax = args.admix_auto
+			Abest = args.admix_auto
+			Q_admix = np.copy(Q3)
+			F_admix = np.copy(F3)
+			Q1 = np.copy(Q2)
+			F1 = np.copy(F2)
+			L1 = L2
+		else:
+			Amin = args.admix_auto/4.0
+			Amax = args.admix_auto - args.admix_auto/4.0
+			Abest = args.admix_auto/2.0
+			Q_admix = np.copy(Q2)
+			F_admix = np.copy(F2)
 
-	for K in K_list:
+		for d in xrange(2, args.admix_depth + 1):
+			print "\n" + "Automatic search - Depth=" + str(d) + ", best Alpha=" + str(Abest)
+			if (Amin == 0):
+				print "NMF: K=" + str(K) + ", alpha=" + str(Amax/2.0) + ", batch=" + str(args.admix_batch) + " and seed=" + str(S_list[0])
+				Q2, F2, L2 = admixNMF(indf, K, likeMatrix, Amax/2.0, args.admix_iter, args.admix_tole, S_list[0], args.admix_batch, args.threads)
+
+				if (L1 > L2):
+					Amax /= 2.0
+					Q3 = np.copy(Q2)
+					F3 = np.copy(F2)
+					L3 = L2
+				else:
+					Abest = Amax/2.0
+					Amin = Amax/4.0
+					Amax -= Amax/4.0
+					Q_admix = np.copy(Q2)
+					F_admix = np.copy(F2)
+
+			elif (Amax == args.admix_auto):
+				print "NMF: K=" + str(K) + ", alpha=" + str(Amin + (Amax - Amin)/2.0) + ", batch=" + str(args.admix_batch) + " and seed=" + str(S_list[0])
+				Q2, F2, L2 = admixNMF(indf, K, likeMatrix, Amin + (Amax - Amin)/2.0, args.admix_iter, args.admix_tole, S_list[0], args.admix_batch, args.threads)
+
+				if (L3 > L2):
+					Amin += (Amax - Amin)/2.0
+					Q3 = np.copy(Q2)
+					F3 = np.copy(F2)
+					L3 = L2
+				else:
+					Abest = Amin + (Amax - Amin)/2.0
+					l = (Amax - Amin)
+					Amin += l/4.0
+					Amax -= l/4.0
+					Q_admix = np.copy(Q2)
+					F_admix = np.copy(F2)
+
+			else:
+				print "NMF: K=" + str(K) + ", alpha=" + str(Amin) + ", batch=" + str(args.admix_batch) + " and seed=" + str(S_list[0])
+				Q1, F1, L1 = admixNMF(indf, K, likeMatrix, Amin, args.admix_iter, args.admix_tole, S_list[0], args.admix_batch, args.threads)
+				print "\n" + "NMF: K=" + str(K) + ", alpha=" + str(Amax) + ", batch=" + str(args.admix_batch) + " and seed=" + str(S_list[0])
+				Q3, F3, L3 = admixNMF(indf, K, likeMatrix, Amax, args.admix_iter, args.admix_tole, S_list[0], args.admix_batch, args.threads)
+
+				if (L1 > L2) & (L1 > L3):
+					Abest = Amin
+					l = (Amax - Amin)
+					Amax = Amin + l/4.0
+					Amin -= l/4.0
+					Q_admix = np.copy(Q1)
+					F_admix = np.copy(F1)
+					Q2 = np.copy(Q1)
+					F2 = np.copy(F1)
+				elif (L3 > L2):
+					Abest = Amax
+					l = (Amax - Amin)
+					Amin = Amax - l/4.0
+					Amax += l/4.0
+					Q_admix = np.copy(Q3)
+					F_admix = np.copy(F3)
+					Q2 = np.copy(Q3)
+					F2 = np.copy(F3)
+				else:
+					l = (Amax - Amin)
+					Amin += l/4.0
+					Amax -= l/4.0
+
+		# Release memory
+		del Q1, Q2, Q3, F1, F2, F3
+
+		# Save best result
+		print "\n" + "Optimal alpha with search depth " + str(args.admix_depth) + ": " + "alpha=" + str(Abest)
+		pd.DataFrame(Q_admix).to_csv(str(args.o) + ".K" + str(K) + ".a" + str(Abest) + ".qopt", sep=" ", header=False, index=False)
+		print "Saved admixture proportions as " + str(args.o) + ".K" + str(K) + ".a" + str(Abest) + ".qopt"
+		if args.admix_save:
+			np.save(str(args.o) + ".K" + str(K) + ".a" + str(a) + ".fopt", F_admix)
+			print "Saved population-specific allele frequencies as " + str(args.o) + ".K" + str(K) + ".a" + str(Abest) + ".fopt.npy (Binary)"
+
+		# Release memory
+		del Q_admix
+		del F_admix
+
+	# Standard admixture estimation
+	else:
+		if args.admix_seed[0] == None:
+			from time import time
+			S_list = [int(time())]
+		else:
+			S_list = args.admix_seed
+
 		for a in args.admix_alpha:
 			for s in S_list:
 				print "\n" + "Estimating admixture using NMF with K=" + str(K) + ", alpha=" + str(a) + ", batch=" + str(args.admix_batch) + " and seed=" + str(s)
-				Q_admix, F_admix = admixNMF(indf, K, likeMatrix, a, args.admix_iter, args.admix_tole, s, args.admix_batch, args.threads)
+				Q_admix, F_admix, _ = admixNMF(indf, K, likeMatrix, a, args.admix_iter, args.admix_tole, s, args.admix_batch, args.threads)
 
 				# Save data frame
 				if args.admix_seed[0] == None:

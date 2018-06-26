@@ -176,4 +176,4 @@ def admixNMF(X, K, likeMatrix, alpha=0, iter=100, tole=5e-5, seed=0, batch=5, th
 
 	logLike = logLike_admix(likeMatrix, Pi, chunks, chunk_N) # Log-likelihood (ngsAdmix model)
 	print "Log-likelihood: " + str(logLike)
-	return Q, F
+	return Q, F, logLike

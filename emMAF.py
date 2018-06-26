@@ -19,7 +19,7 @@ def updateF(likeMatrix, f, S, N):
 	newF = np.zeros(n)
 
 	# Multithreading
-	threads = [threading.Thread(target=innerEM, args=(likeMatrix, f, chunk, N, newF)) for chunk in S]
+	threads = [threading.Thread(target=alleleEM_inner, args=(likeMatrix, f, chunk, N, newF)) for chunk in S]
 	for thread in threads:
 		thread.start()
 	for thread in threads:
@@ -29,7 +29,7 @@ def updateF(likeMatrix, f, S, N):
 
 # Multithreaded inner update
 @jit("void(f4[:, :], f8[:], i8, i8, f8[:])", nopython=True, nogil=True, cache=True)
-def innerEM(likeMatrix, f, S, N, newF):
+def alleleEM_inner(likeMatrix, f, S, N, newF):
 	m, n = likeMatrix.shape # Dimension of likelihood matrix
 	m /= 3 # Number of individuals
 
