@@ -25,7 +25,7 @@ import os.path
 
 ##### Argparse #####
 parser = argparse.ArgumentParser(prog="PCAngsd")
-parser.add_argument("--version", action="version", version="%(prog)s 0.93")
+parser.add_argument("--version", action="version", version="%(prog)s 0.935")
 parser.add_argument("-beagle", metavar="FILE",
 	help="Input file of genotype likelihoods in Beagle format (.gz)")
 parser.add_argument("-indf", metavar="FILE",
@@ -96,19 +96,18 @@ parser.add_argument("-expg_save", action="store_true",
 	help="Save genotype dosages (Binary)")
 parser.add_argument("-sites_save", action="store_true",
 	help="Save marker IDs of filtered sites")
+parser.add_argument("-allocate_sites", metavar="INT", type=int, default=0,
+	help="Pre-allocate memory for specified number of sites")
 parser.add_argument("-threads", metavar="INT", type=int, default=1,
 	help="Number of threads")
 parser.add_argument("-o", metavar="OUTPUT", help="Prefix output file name", default="pcangsd")
 args = parser.parse_args()
 
-print "PCAngsd 0.93"
+print "PCAngsd 0.935"
 print "Using " + str(args.threads) + " thread(s)"
 
 # Setting up workflow parameters
-if args.inbreed == 3:
-	param_kinship = True
-
-if args.kinship:
+if (args.kinship) or (args.inbreed == 3):
 	param_kinship = True
 else:
 	param_kinship = False
@@ -128,7 +127,7 @@ if args.beagle != None:
 	assert (os.path.isfile(args.beagle)), "Beagle file doesn't exist!"
 	assert args.beagle[-3:] == ".gz", "Beagle file must be in gzip format!"
 	from helpFunctions import readGzipBeagle
-	likeMatrix = readGzipBeagle(args.beagle)
+	likeMatrix = readGzipBeagle(args.beagle, args.allocate_sites)
 else:
 	print "\n" + "Parsing PLINK files"
 	from helpFunctions import readPlink
@@ -141,7 +140,7 @@ print str(m) + " samples and " + str(n) + " sites"
 
 ##### Estimate population allele frequencies #####
 if args.beagle != None:
-	print "Estimating population allele frequencies"
+	print "\n" + "Estimating population allele frequencies"
 	f = alleleEM(likeMatrix, args.maf_iter, args.maf_tole, args.threads)
 
 

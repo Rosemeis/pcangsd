@@ -41,7 +41,7 @@ def updateFumagalli(likeMatrix, f, S, N, expG):
 def covFumagalli(likeMatrix, f, S, N, expG, diagC):
 	m, n = likeMatrix.shape # Dimension of likelihood matrix
 	m /= 3 # Number of individuals
-	probMatrix = np.zeros((3, n), dtype=np.float32)
+	probMatrix = np.empty((3, n), dtype=np.float32)
 
 	# Loop over individuals
 	for ind in xrange(S, min(S+N, m)):

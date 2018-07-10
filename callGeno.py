@@ -19,17 +19,21 @@ def gProbGeno(likeMatrix, indF, delta, S, N, G):
 	
 	for ind in xrange(S, min(S+N, m)):
 		# Estimate posterior probabilities
-		probMatrix = np.empty((3, n), dtype=np.float32)
+		probMatrix = np.empty((3, n))
 		for s in xrange(n):
-			probMatrix[0, s] = likeMatrix[3*ind, s]*((1 - indF[ind, s])*(1 - indF[ind, s]))
-			probMatrix[1, s] = likeMatrix[3*ind+1, s]*(2*indF[ind, s]*(1 - indF[ind, s]))
-			probMatrix[2, s] = likeMatrix[3*ind+2, s]*(indF[ind, s]*indF[ind, s])
+			probMatrix[0, s] = likeMatrix[3*ind, s]*(1 - indF[ind, s])*(1 - indF[ind, s])
+			probMatrix[1, s] = likeMatrix[3*ind+1, s]*2*indF[ind, s]*(1 - indF[ind, s])
+			probMatrix[2, s] = likeMatrix[3*ind+2, s]*indF[ind, s]*indF[ind, s]
+		probMatrix /= np.sum(probMatrix, axis=0)
 
 		# Find genotypes with highest probability
 		for s in xrange(n):
+			if (probMatrix[0, s] == probMatrix[1, s]) & (probMatrix[0, s] == probMatrix[2, s]):
+				G[ind, s] = 9
+				continue
 			geno = np.argmax(probMatrix[:, s])
 			if probMatrix[geno, s] < delta:
-				G[ind, s] = -9
+				G[ind, s] = 9
 			else:
 				G[ind, s] = geno
 
@@ -41,20 +45,23 @@ def gProbGenoInbreeding(likeMatrix, indF, F, delta, S, N, G):
 	
 	for ind in xrange(S, min(S+N, m)):
 		# Estimate posterior probabilities
-		probMatrix = np.empty((3, n), dtype=np.float32)
+		probMatrix = np.empty((3, n))
 		for s in xrange(n):
 			probMatrix[0, s] = likeMatrix[3*ind, s]*((1 - indF[ind, s])*(1 - indF[ind, s]) + indF[ind, s]*(1 - indF[ind, s])*F[ind])
 			probMatrix[1, s] = likeMatrix[3*ind+1, s]*(2*indF[ind, s]*(1 - indF[ind, s])*(1 - F[ind]))
 			probMatrix[2, s] = likeMatrix[3*ind+2, s]*(indF[ind, s]*indF[ind, s] + indF[ind, S]*(1 - indF[ind, S])*F[ind])
+		probMatrix /= np.sum(probMatrix, axis=0)
 
 		# Find genotypes with highest probability
 		for s in xrange(n):
+			if (probMatrix[0, s] == probMatrix[1, s]) & (probMatrix[0, s] == probMatrix[2, s]):
+				G[ind, s] = 9
+				continue
 			geno = np.argmax(probMatrix[:, s])
 			if probMatrix[geno, s] < delta:
-				G[ind, s] = -9
+				G[ind, s] = 9
 			else:
 				G[ind, s] = geno
-
 
 ##### Genotype calling #####
 def callGeno(likeMatrix, indF, F=None, delta=0.0, threads=1):

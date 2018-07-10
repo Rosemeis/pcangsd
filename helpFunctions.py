@@ -12,20 +12,26 @@ from numba import jit
 from math import sqrt
 
 # Read Beagle gzip file
-def readGzipBeagle(beagle):
+def readGzipBeagle(beagle, nUser):
 	with os.popen("zcat " + str(beagle)) as f:
 		c = -1
 		for line in f:
 			if c < 0:
 				c += 1
 				m3 = len(line.split("\t"))-3
-				likeMatrix = np.empty((m3, 15000000), dtype=np.float32)
-				continue
+				if nUser == 0:
+					n = 1000000
+					likeMatrix = np.empty((n, m3), dtype=np.float32)
+				else:
+					likeMatrix = np.empty((nUser, m3), dtype=np.float32)
 			else:
-				likeMatrix[:, c] = line.split("\t")[3:]
+				if c == n:
+					n *= 2
+					likeMatrix.resize((n, m3), refcheck=False)
+					print "Changed allocation to " + str(n) + " sites"
+				likeMatrix[c, :] = line.split("\t")[3:]
 				c += 1
-		return likeMatrix[:, :c]
-
+		return likeMatrix[:c, :].T
 
 # Root mean squared error
 @jit("f8(f8[:], f8[:])", nopython=True, nogil=True, cache=True)
@@ -151,7 +157,6 @@ def readPlink(plink, epsilon, t):
 
 	return likeMatrix, f, pos
 
-
 # Convert PLINK genotype matrix into genotype likelihoods
 @jit("void(f4[:, :], f4[:, :], i8, i8, f8)", nopython=True, nogil=True, cache=True)
 def convertPlink(likeMatrix, G, S, N, epsilon):
@@ -159,9 +164,9 @@ def convertPlink(likeMatrix, G, S, N, epsilon):
 	for ind in xrange(S, min(S+N, m)):
 		for s in xrange(n):
 			if np.isnan(G[ind, s]): # Missing site
-				likeMatrix[3*ind, s] = 1.0/3.0
-				likeMatrix[3*ind+1, s] = 1.0/3.0
-				likeMatrix[3*ind+2, s] = 1.0/3.0
+				likeMatrix[3*ind, s] = 0.333333
+				likeMatrix[3*ind+1, s] = 0.333333
+				likeMatrix[3*ind+2, s] = 0.333333
 			else:
 				for g in xrange(3):
 					if int(G[ind, s]) == g:
