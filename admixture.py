@@ -129,40 +129,7 @@ def admixNMF(X, K, likeMatrix, alpha=0, iter=100, tole=5e-5, seed=0, batch=5, th
 			break
 		prevQ = np.copy(Q)
 
-	del perm, prevQ
-
-	# Full iterations
-	pF = 2*(1 + (m*n + m*K)/(n*K + n))
-	pQ = 2*(1 + (m*n + n*K)/(m*K + m))
-	for f_iteration in xrange(5):
-		# Update F
-		A = np.dot(X.T, Q)
-		B = np.dot(Q.T, Q)
-		for inner in xrange(pF): # Acceleration updates
-			F_prev = np.copy(F)
-			updateF(F, A, np.dot(F, B))
-
-			if inner == 0:
-				F_init = frobenius(F, F_prev)
-			else:
-				if (frobenius(F, F_prev) <= (0.1*F_init)):
-					break
-
-		# Update Q
-		A = np.dot(X, F)
-		B = np.dot(F.T, F)
-		for inner in xrange(pQ): # Acceleration updates
-			Q_prev = np.copy(Q)
-			updateQ(Q, A, np.dot(Q, B), alpha*batch)
-			Q /= np.sum(Q, axis=1, keepdims=True)
-
-			if inner == 0:
-				Q_init = frobenius(Q, Q_prev)
-			else:
-				if (frobenius(Q, Q_prev) <= (0.1*Q_init)):
-					break
-
-	del A, B, F_prev, Q_prev
+	del perm, prevQ, A, B, F_prev, Q_prev
 
 	# Reshuffle columns
 	F = F[np.argsort(shuffleX)]
@@ -170,10 +137,83 @@ def admixNMF(X, K, likeMatrix, alpha=0, iter=100, tole=5e-5, seed=0, batch=5, th
 
 	# Frobenius and log-like
 	Pi = np.dot(Q, F.T) # Individual allele frequencies from admixture estimates
-	Pi.clip(min=1e-4, max=1-(1e-4), out=Pi)
 	Obj = frobenius2d_multi(X, Pi, chunks, chunk_N)
 	print "Frobenius error: " + str(Obj)
 
 	logLike = logLike_admix(likeMatrix, Pi, chunks, chunk_N) # Log-likelihood (ngsAdmix model)
 	print "Log-likelihood: " + str(logLike)
 	return Q, F, logLike
+
+# Automatic search for appropriate alpha
+def alphaSearch(aEnd, depth, indF, K, likeMatrix, iter, tole, seed, batch, t):
+	# First search
+	aMin = 0
+	aMax = aEnd
+	aMid = (aMin + aMax)/2.0
+	aStep = (aMin + aMax)/4.0
+
+	print "NMF: K=" + str(K) + ", alpha=" + str(aMin) + ", batch=" + str(batch) + " and seed=" + str(seed)
+	Q_best, F_best, L_best = admixNMF(indF, K, likeMatrix, aMin, iter, tole, seed, batch, t)
+	argL = 0
+	aBest = aMin
+	
+	print "\n" + "NMF: K=" + str(K) + ", alpha=" + str(aMid) + ", batch=" + str(batch) + " and seed=" + str(seed)
+	Q_test, F_test, L_test = admixNMF(indF, K, likeMatrix, aMid, iter, tole, seed, batch, t)
+	if L_test > L_best:
+		Q_best, F_best, L_best = np.copy(Q_test), np.copy(F_test), L_test
+		argL = 1
+		aBest = aMid
+	
+	print "\n" + "NMF: K=" + str(K) + ", alpha=" + str(aMax) + ", batch=" + str(batch) + " and seed=" + str(seed)
+	Q_test, F_test, L_test = admixNMF(indF, K, likeMatrix, aMax, iter, tole, seed, batch, t)
+	if L_test > L_best:
+		Q_best, F_best, L_best = np.copy(Q_test), np.copy(F_test), L_test
+		argL = 2
+		aBest = aMax
+
+	if argL == 0:
+		aMax = aMid
+		aMid = aMax/2.0
+	else:
+		aMid = [aMin, aMid, aMax][argL]
+		aMin = aMid - aStep
+		aMax = aMid + aStep
+
+	for d in range(2, depth+1):
+		print "\n" + "Depth=" + str(d) + ", best alpha=" + str(aBest)
+		if aMin == 0:
+			print "\n" + "NMF: K=" + str(K) + ", alpha=" + str(aMid) + ", batch=" + str(batch) + " and seed=" + str(seed)
+			Q_test, F_test, L_test = admixNMF(indF, K, likeMatrix, aMid, iter, tole, seed, batch, t)
+			if L_test > L_best:
+				Q_best, F_best, L_best = np.copy(Q_test), np.copy(F_test), L_test
+				argL = 1
+				aBest = aMid
+
+		else:
+			print "\n" + "NMF: K=" + str(K) + ", alpha=" + str(aMin) + ", batch=" + str(batch) + " and seed=" + str(seed)
+			Q_test, F_test, L_test = admixNMF(indF, K, likeMatrix, aMin, iter, tole, seed, batch, t)
+			if L_test > L_best:
+				Q_best, F_best, L_best = np.copy(Q_test), np.copy(F_test), L_test
+				argL = 0
+				aBest = aMin
+
+			else:
+				print "\n" + "NMF: K=" + str(K) + ", alpha=" + str(aMax) + ", batch=" + str(batch) + " and seed=" + str(seed)
+				Q_test, F_test, L_test = admixNMF(indF, K, likeMatrix, aMax, iter, tole, seed, batch, t)
+				if L_test > L_best:
+					Q_best, F_best, L_best = np.copy(Q_test), np.copy(F_test), L_test
+					argL = 2
+					aBest = aMax
+				else:
+					argL = 1
+
+		aStep /= 2.0
+		if aMin == 0:
+			aMax = aMid
+			aMid = aMax/2.0
+		else:
+			aMid = [aMin, aMid, aMax][argL]
+			aMin = aMid - aStep
+			aMax = aMid + aStep
+
+	return Q_best, F_best, aBest
