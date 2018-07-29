@@ -12,18 +12,16 @@ from numba import jit
 from math import sqrt
 
 # Read Beagle gzip file
-def readGzipBeagle(beagle, nUser):
+def readGzipBeagle(beagle, n):
 	with os.popen("zcat " + str(beagle)) as f:
 		c = -1
 		for line in f:
 			if c < 0:
 				c += 1
 				m3 = len(line.split("\t"))-3
-				if nUser == 0:
+				if n == 0:
 					n = 1000000
-					likeMatrix = np.empty((n, m3), dtype=np.float32)
-				else:
-					likeMatrix = np.empty((nUser, m3), dtype=np.float32)
+				likeMatrix = np.empty((n, m3), dtype=np.float32)
 			else:
 				if c == n:
 					n *= 2
@@ -32,6 +30,7 @@ def readGzipBeagle(beagle, nUser):
 				likeMatrix[c, :] = line.split("\t")[3:]
 				c += 1
 		return likeMatrix[:c, :].T
+
 
 # Root mean squared error
 @jit("f8(f8[:], f8[:])", nopython=True, nogil=True, cache=True)
@@ -141,7 +140,7 @@ def readPlink(plink, epsilon, t):
 	snpFile = snpClass.read(dtype=np.float32) # Read PLINK files into memory
 	m, _ = snpFile.val.shape
 	f = np.nanmean(snpFile.val, axis=0, dtype=np.float64)/2 # Allele frequencies
-	
+
 	# Construct genotype likelihood matrix
 	print "Converting PLINK files into genotype likelihood matrix"
 	likeMatrix = np.zeros((3*m, snpFile.val.shape[1]), dtype=np.float32)
