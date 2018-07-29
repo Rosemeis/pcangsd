@@ -13,97 +13,175 @@ from helpFunctions import rmse1d
 
 # Import libraries
 import numpy as np
+import threading
+from numba import jit
+
+# Inner update - model 1
+@jit("void(f4[:, :], f4[:, :], i8, i8, f8[:])", nopython=True, nogil=True, cache=True)
+def inbreedEM_inner1(likeMatrix, indF, S, N, F):
+	m, n = indF.shape # Dimensions
+	probZ = np.empty((2, n))
+	probMatrix = np.empty((3, n))
+
+	for ind in xrange(S, min(S+N, m)):
+		# Estimate posterior probabilities (Z)
+		for s in xrange(n):
+			# Z = 0
+			probMatrix[0, s] = likeMatrix[3*ind, s]*(1 - indF[ind, s])*(1 - indF[ind, s])
+			probMatrix[1, s] = likeMatrix[3*ind+1, s]*2*indF[ind, s]*(1 - indF[ind, s])
+			probMatrix[2, s] = likeMatrix[3*ind+2, s]*indF[ind, s]*indF[ind, s]
+			probZ[0, s] = np.sum(probMatrix[:, s])*(1 - F[ind])
+
+			# Z = 1
+			probMatrix[0, s] = likeMatrix[3*ind, s]*(1 - indF[ind, s])
+			probMatrix[1, s] = 0
+			probMatrix[2, s] = likeMatrix[3*ind+2, s]*indF[ind, s]
+			probZ[1, s] = np.sum(probMatrix[:, s])*F[ind]
+		probZ /= np.sum(probZ, axis=0)
+
+		# Update the inbreeding coefficient
+		F[ind] = np.sum(probZ[1, :])/n
+
+# Inner update - model 2
+@jit("void(f4[:, :], f4[:, :], i8, i8, f8[:])", nopython=True, nogil=True, cache=True)
+def inbreedEM_inner2(likeMatrix, indF, S, N, F):
+	m, n = indF.shape # Dimensions
+	probMatrix = np.empty((3, n)) # Container for posterior probabilities
+
+	for ind in xrange(S, min(S+N, m)):
+		expH = 0
+
+		# Estimate posterior probabilities
+		for s in xrange(n):
+			probMatrix[0, s] = max(0, likeMatrix[3*ind, s]*((1 - indF[ind, s])*(1 - indF[ind, s]) + (1 - indF[ind, s])*indF[ind, s]*F[ind]))
+			probMatrix[1, s] = max(0, likeMatrix[3*ind + 1, s]*2*indF[ind, s]*(1 - indF[ind, s])*(1 - F[ind]))
+			probMatrix[2, s] = max(0, likeMatrix[3*ind + 2, s]*(indF[ind, s]*indF[ind, s] + (1 - indF[ind, s])*indF[ind, s]*F[ind]))
+			sumNorm = np.sum(probMatrix[:, s])
+
+			# Normalize posteriors
+			if sumNorm > 0:
+				probMatrix[1, s] /= sumNorm
+			probMatrix[1, s] = max(1e-4, probMatrix[1, s]) # Fix lower boundary
+
+			# Expected number of heterozygotes
+			expH += 2*indF[ind, s]*(1 - indF[ind, s])
+		
+		# Update the inbreeding coefficient
+		F[ind] = 1 - (np.sum(probMatrix[1, :])/expH)
+
+# Population allele frequencies version (-iter 0) - Inner update - model 1
+@jit("void(f4[:, :], f8[:], i8, i8, f8[:])", nopython=True, nogil=True, cache=True)
+def inbreedEM_inner1_noIndF(likeMatrix, f, S, N, F):
+	m, n = likeMatrix.shape # Dimension of likelihood matrix
+	m /= 3 # Number of individuals
+	probZ = np.empty((2, n))
+	probMatrix = np.empty((3, n))
+
+	for ind in xrange(S, min(S+N, m)):
+		# Estimate posterior probabilities (Z)
+		for s in xrange(n):
+			# Z = 0
+			probMatrix[0, s] = likeMatrix[3*ind, s]*(1 - f[s])*(1 - f[s])
+			probMatrix[1, s] = likeMatrix[3*ind+1, s]*2*f[s]*(1 - f[s])
+			probMatrix[2, s] = likeMatrix[3*ind+2, s]*f[s]*f[s]
+			probZ[0, s] = np.sum(probMatrix[:, s])*(1 - F[ind])
+
+			# Z = 1
+			probMatrix[0, s] = likeMatrix[3*ind, s]*(1 - f[s])
+			probMatrix[1, s] = 0
+			probMatrix[2, s] = likeMatrix[3*ind+2, s]*f[s]
+			probZ[1, s] = np.sum(probMatrix[:, s])*F[ind]
+		probZ /= np.sum(probZ, axis=0)
+
+		# Update the inbreeding coefficient
+		F[ind] = np.sum(probZ[1, :])/n
+
+# Population allele frequencies version (-iter 0) - Inner update - model 2
+@jit("void(f4[:, :], f8[:], i8, i8, f8[:])", nopython=True, nogil=True, cache=True)
+def inbreedEM_inner2_noIndF(likeMatrix, f, S, N, F):
+	m, n = likeMatrix.shape # Dimension of likelihood matrix
+	m /= 3 # Number of individuals
+	probMatrix = np.empty((3, n)) # Container for posterior probabilities
+	expH = np.sum(2*f*(1 - f)) # Expected number of heterozygotes
+
+	for ind in xrange(S, min(S+N, m)):
+		# Estimate posterior probabilities
+		for s in xrange(n):
+			probMatrix[0, s] = max(0, likeMatrix[3*ind, s]*((1 - f[s])*(1 - f[s]) + (1 - f[s])*f[s]*F[ind]))
+			probMatrix[1, s] = max(0, likeMatrix[3*ind + 1, s]*2*f[s]*(1 - f[s])*(1 - F[ind]))
+			probMatrix[2, s] = max(0, likeMatrix[3*ind + 2, s]*(f[s]*f[s] + (1 - f[s])*f[s]*F[ind]))
+			sumNorm = np.sum(probMatrix[:, s])
+
+			# Normalize posteriors
+			if sumNorm > 0:
+				probMatrix[1, s] /= sumNorm
+			probMatrix[1, s] = max(1e-4, probMatrix[1, s]) # Fix lower boundary
+		
+		# Update the inbreeding coefficient
+		F[ind] = 1 - (np.sum(probMatrix[1, :])/expH)
 
 
 # EM algorithm for estimation of inbreeding coefficients
-def inbreedEM(likeMatrix, f, model=1, EM=200, EM_tole=1e-4):
+def inbreedEM(likeMatrix, indF, model, EM=200, EM_tole=1e-4, t=1):
 	m, n = likeMatrix.shape # Dimension of genotype likelihood matrix
 	m /= 3 # Number of individuals
-	F = np.random.rand(m) # Random intialization of inbreeding coefficients
+	F = np.ones(m)*0.25 # Initialization of inbreeding coefficients
 	F_prev = np.copy(F)
 
-	if model == 1: # Maximum likelihood estimator
-		for iteration in xrange(1, EM+1): # EM iterations
-			if f.ndim == 1:
-				# Estimated genotype frequencies given IBD state (Z)
-				fMatrix_z0 = np.vstack(((1-f)**2, 2*f*(1-f), f**2))
-				fMatrix_z1 = np.vstack(((1-f), np.zeros(n, dtype=np.float32), f))
+	# Multithreading parameters
+	chunk_N = int(np.ceil(float(m)/t))
+	chunks = [i * chunk_N for i in xrange(t)]
 
-			wLike = np.empty((2,n), dtype=np.float32) # Weighted likelihood by prior
-
-			for ind in xrange(m):
-				if f.ndim == 2:
-					# Estimated genotype frequencies given IBD state (Z)
-					fMatrix_z0 = np.vstack(((1-f[ind])**2, 2*f[ind]*(1-f[ind]), f[ind]**2))
-					fMatrix_z1 = np.vstack(((1-f[ind]), np.zeros(n, dtype=np.float32), f[ind]))
-
-				wLike[0, :] = np.sum(likeMatrix[(3*ind):(3*ind+3)]*fMatrix_z0, axis=0)*(1-F[ind])
-				wLike[1, :] = np.sum(likeMatrix[(3*ind):(3*ind+3)]*fMatrix_z1, axis=0)*F[ind]
-			
-				# Expectation maximation - Update F
-				zProb = wLike/np.sum(wLike, axis=0) # Posterior probabilities
-				F[ind] = np.sum(zProb[1, :])/float(n)
+	# Model 1 - (Hall et al.)
+	if model == 1:
+		for iteration in xrange(1, EM + 1):
+			if indF.ndim == 2:
+				# Multithreading - Update F
+				threads = [threading.Thread(target=inbreedEM_inner1, args=(likeMatrix, indF, chunk, chunk_N, F)) for chunk in chunks]
+				for thread in threads:
+					thread.start()
+				for thread in threads:
+					thread.join()
+			else:
+				# Population allele frequencies version (-iter 0) - Multithreading - Update F
+				threads = [threading.Thread(target=inbreedEM_inner1_noIndF, args=(likeMatrix, indF, chunk, chunk_N, F)) for chunk in chunks]
+				for thread in threads:
+					thread.start()
+				for thread in threads:
+					thread.join()
 
 			# Break EM update if converged
-			diff = rmse1d(F, F_prev)
-			print "Inbreeding coefficients computed (" +str(iteration) + "). RMSD=" + str(diff)
-			if diff < EM_tole:
-				print "EM (Inbreeding) converged at iteration: " + str(iteration)
+			updateDiff = rmse1d(F, F_prev)
+			print "Inbreeding coefficients estimated (" + str(iteration) + "). RMSD=" + str(updateDiff)
+			if updateDiff < EM_tole:
+				print "EM (Inbreeding - sites) converged at iteration: " + str(iteration)
 				break
-
-			if iteration == 1:
-				oldDiff = diff
-			else:
-				# Second convergence criterion
-				if abs(diff - oldDiff) <= 1e-5:
-					print "Estimation of inbreeding coefficients. RMSD between iterations: " + str(abs(diff - oldDiff))
-					break
-				else:
-					oldDiff = diff
-
 			F_prev = np.copy(F)
 
-	elif model == 2: # Secondary model - Simple estimator (Vieira-model)
-		for iteration in xrange(1, EM+1): # EM iterations
-			if f.ndim == 1:
-				# Expected number of heterozygotes
-				expH = np.sum(2*f*(1-f))
-
-			for ind in xrange(m):
-				if f.ndim == 1:
-					# Estimated genotype frequencies given F
-					fMatrix = np.vstack(((1-f)**2 + (1-f)*f*F[ind], 2*(1-f)*f*(1-F[ind]), f**2 + (1-f)*f*F[ind]))
-				
-				else:
-					# Estimated genotype frequencies given F
-					fMatrix = np.vstack(((1-f[ind])**2 + (1-f[ind])*f[ind]*F[ind], 2*(1-f[ind])*f[ind]*(1-F[ind]), f[ind]**2 + (1-f[ind])*f[ind]*F[ind]))
-					
-					# Expected number of heterozygotes
-					expH = np.sum(2*f[ind]*(1-f[ind]))
-
-				wLike = likeMatrix[(3*ind):(3*ind+3)]*fMatrix # Weighted likelihood by prior
-
-				# Expectation maximization - Update F
-				gProb = wLike/np.sum(wLike, axis=0) # Posterior probabilities
-				F[ind] = 1 - np.sum(gProb[1, :])/expH
+	# Model 2 - (Vieira et al.)
+	if model == 2:
+		for iteration in xrange(1, EM + 1):
+			if indF.ndim == 2:
+				# Multithreading - Update F
+				threads = [threading.Thread(target=inbreedEM_inner2, args=(likeMatrix, indF, chunk, chunk_N, F)) for chunk in chunks]
+				for thread in threads:
+					thread.start()
+				for thread in threads:
+					thread.join()
+			else:
+				# Population allele frequencies version (-iter 0) - Multithreading - Update F
+				threads = [threading.Thread(target=inbreedEM_inner2_noIndF, args=(likeMatrix, indF, chunk, chunk_N, F)) for chunk in chunks]
+				for thread in threads:
+					thread.start()
+				for thread in threads:
+					thread.join()
 
 			# Break EM update if converged
-			diff = rmse1d(F, F_prev)
-			print "Inbreeding coefficients computed (" +str(iteration) + "). RMSD=" + str(diff)
-			if diff < EM_tole:
-				print "EM (Inbreeding) converged at iteration: " + str(iteration)
+			updateDiff = rmse1d(F, F_prev)
+			print "Inbreeding coefficients estimated (" + str(iteration) + "). RMSD=" + str(updateDiff)
+			if updateDiff < EM_tole:
+				print "EM (Inbreeding - sites) converged at iteration: " + str(iteration)
 				break
-
-			if iteration == 1:
-				oldDiff = diff
-			else:
-				# Second convergence criterion
-				if abs(diff - oldDiff) <= 1e-5:
-					print "Estimation of inbreeding coefficients. RMSD between iterations: " + str(abs(diff - oldDiff))
-					break
-				else:
-					oldDiff = diff
-
 			F_prev = np.copy(F)
 
 	return F

@@ -70,7 +70,7 @@ def loglike(likeMatrix, indF, F, S, N, logAlt, logNull):
 # EM algorithm for estimation of inbreeding coefficients
 def inbreedSitesEM(likeMatrix, indF, EM=200, EM_tole=1e-4, t=1):
 	m, n = indF.shape # Dimensions
-	F = np.zeros(n) # Initialization of inbreeding coefficients
+	F = np.ones(n)*0.25 # Initialization of inbreeding coefficients
 	F_prev = np.copy(F)
 
 	# Multithreading parameters
@@ -88,7 +88,7 @@ def inbreedSitesEM(likeMatrix, indF, EM=200, EM_tole=1e-4, t=1):
 
 		# Break EM update if converged
 		updateDiff = rmse1d(F, F_prev)
-		print "Inbreeding coefficients estimated (" +str(iteration) + "). RMSD=" + str(updateDiff)
+		print "Inbreeding coefficients estimated (" + str(iteration) + "). RMSD=" + str(updateDiff)
 		if updateDiff < EM_tole:
 			print "EM (Inbreeding - sites) converged at iteration: " + str(iteration)
 			break

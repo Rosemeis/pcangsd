@@ -125,7 +125,7 @@ def admixNMF(X, K, likeMatrix, alpha=0, iter=100, tole=5e-5, seed=0, batch=5, th
 		print "ASG-MU (" + str(iteration) + "). Q-RMSD=" + str(diff)
 
 		if diff < tole:
-			print "ASG-MU has converged. Running full iterations."
+			print "ASG-MU has converged."
 			break
 		prevQ = np.copy(Q)
 
@@ -137,6 +137,7 @@ def admixNMF(X, K, likeMatrix, alpha=0, iter=100, tole=5e-5, seed=0, batch=5, th
 
 	# Frobenius and log-like
 	Pi = np.dot(Q, F.T) # Individual allele frequencies from admixture estimates
+	Pi.clip(min=1e-4, max=1-(1e-4), out=Pi)
 	Obj = frobenius2d_multi(X, Pi, chunks, chunk_N)
 	print "Frobenius error: " + str(Obj)
 

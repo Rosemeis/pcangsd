@@ -25,7 +25,7 @@ import os.path
 
 ##### Argparse #####
 parser = argparse.ArgumentParser(prog="PCAngsd")
-parser.add_argument("--version", action="version", version="%(prog)s 0.94")
+parser.add_argument("--version", action="version", version="%(prog)s 0.95")
 parser.add_argument("-beagle", metavar="FILE",
 	help="Input file of genotype likelihoods in Beagle format (.gz)")
 parser.add_argument("-indf", metavar="FILE",
@@ -78,9 +78,9 @@ parser.add_argument("-admix_seed", metavar="INT-LIST", type=int, nargs="+", defa
 	help="Random seed for admixture estimation")
 parser.add_argument("-admix_K", metavar="INT", type=int,
 	help="Number of ancestral population for admixture estimation")
-parser.add_argument("-admix_iter", metavar="INT", type=int, default=50,
-	help="Maximum iterations for admixture estimation - NMF (50)")
-parser.add_argument("-admix_tole", metavar="FLOAT", type=float, default=1e-4,
+parser.add_argument("-admix_iter", metavar="INT", type=int, default=100,
+	help="Maximum iterations for admixture estimation - NMF (100)")
+parser.add_argument("-admix_tole", metavar="FLOAT", type=float, default=5e-5,
 	help="Tolerance for admixture estimation update - NMF (1e-4)")
 parser.add_argument("-admix_batch", metavar="INT", type=int, default=5,
 	help="Number of batches used for stochastic gradient descent (5)")
@@ -103,7 +103,7 @@ parser.add_argument("-threads", metavar="INT", type=int, default=1,
 parser.add_argument("-o", metavar="OUTPUT", help="Prefix output file name", default="pcangsd")
 args = parser.parse_args()
 
-print "PCAngsd 0.94"
+print "PCAngsd 0.95"
 print "Using " + str(args.threads) + " thread(s)"
 
 # Setting up workflow parameters

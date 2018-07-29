@@ -20,10 +20,10 @@ def readGzipBeagle(beagle, nUser):
 				c += 1
 				m3 = len(line.split("\t"))-3
 				if nUser == 0:
-					n = 1000000
-					likeMatrix = np.empty((n, m3), dtype=np.float32)
+					n = 750000
 				else:
-					likeMatrix = np.empty((nUser, m3), dtype=np.float32)
+					n = nUser
+				likeMatrix = np.empty((n, m3), dtype=np.float32)
 			else:
 				if c == n:
 					n *= 2
