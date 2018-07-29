@@ -156,14 +156,14 @@ def alphaSearch(aEnd, depth, indF, K, likeMatrix, iter, tole, seed, batch, t):
 	Q_best, F_best, L_best = admixNMF(indF, K, likeMatrix, aMin, iter, tole, seed, batch, t)
 	argL = 0
 	aBest = aMin
-	
+
 	print "\n" + "NMF: K=" + str(K) + ", alpha=" + str(aMid) + ", batch=" + str(batch) + " and seed=" + str(seed)
 	Q_test, F_test, L_test = admixNMF(indF, K, likeMatrix, aMid, iter, tole, seed, batch, t)
 	if L_test > L_best:
 		Q_best, F_best, L_best = np.copy(Q_test), np.copy(F_test), L_test
 		argL = 1
 		aBest = aMid
-	
+
 	print "\n" + "NMF: K=" + str(K) + ", alpha=" + str(aMax) + ", batch=" + str(batch) + " and seed=" + str(seed)
 	Q_test, F_test, L_test = admixNMF(indF, K, likeMatrix, aMax, iter, tole, seed, batch, t)
 	if L_test > L_best:
