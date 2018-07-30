@@ -377,7 +377,8 @@ if args.admix:
 				if args.admix_seed[0] == None:
 					np.save(str(args.o) + ".K" + str(K) + ".a" + str(a_best) + ".fopt", F_admix)
 					print "Saved population-specific allele frequencies as " + str(args.o) + ".K" + str(K) + ".a" + str(a_best) + ".fopt.npy (Binary)"
-
+			del Q_admix
+			del F_admix
 		# Standard admixture estimation
 		else:
 			for a in args.admix_alpha:
