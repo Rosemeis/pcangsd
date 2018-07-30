@@ -60,7 +60,7 @@ def updateQ(Q, A, QB, alpha):
 			Q[i, k] = min(Q[i, k], 1-(1e-4))
 
 # Estimate admixture using non-negative matrix factorization
-def admixNMF(X, K, likeMatrix, alpha=0, iter=100, tole=5e-5, seed=0, batch=5, threads=1):
+def admixNMF(X, K, likeMatrix, alpha=0, iter=100, tole=5e-5, seed=None, batch=5, threads=1):
 	m, n = X.shape # Dimensions of individual allele frequencies
 
 	# Shuffle individual allele frequencies

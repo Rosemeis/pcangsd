@@ -359,11 +359,7 @@ if args.admix:
 	else:
 		K_list = args.K_list
 
-	if args.admix_seed[0] == None:
-		from time import time
-		S_list = [int(time())]
-	else:
-		S_list = args.admix_seed
+	S_list = args.admix_seed
 
 	for K in K_list:
 		# Automatic search for optimal alpha parameter
