@@ -357,7 +357,7 @@ if args.admix:
 	if len(args.admix_K) < 1:
 		K_list = [nEV + 1, ]
 	else:
-		K_list = args.K_list
+		K_list = args.admix_K
 
 	S_list = args.admix_seed
 
