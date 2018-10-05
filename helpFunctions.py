@@ -159,7 +159,7 @@ def readPlink(plink, epsilon, t):
 
 # Convert PLINK genotype matrix into genotype likelihoods
 @jit("void(f4[:, :], f4[:, :], i8, i8, f8)", nopython=True, nogil=True, cache=True)
-def convertPlink(likeMatrix, G, S, N, epsilon):
+def convertPlink(likeMatrix, G, S, N, e):
 	m, n = G.shape # Dimension of genotype matrix
 	for ind in xrange(S, min(S+N, m)):
 		for s in xrange(n):
@@ -168,8 +168,15 @@ def convertPlink(likeMatrix, G, S, N, epsilon):
 				likeMatrix[3*ind+1, s] = 0.333333
 				likeMatrix[3*ind+2, s] = 0.333333
 			else:
-				for g in xrange(3):
-					if int(G[ind, s]) == g:
-						likeMatrix[3*ind + g, s] = 1.0 - epsilon
-					else:
-						likeMatrix[3*ind + g, s] = epsilon/2.0
+				if int(G[ind, s]) == 0:
+					likeMatrix[3*ind, s] = (1 - e)*(1 - e)
+					likeMatrix[3*ind + 1, s] = 2*(1 - e)*e
+					likeMatrix[3*ind + 2, s] = e*e
+				elif int(G[ind, s]) == 1:
+					likeMatrix[3*ind, s] = (1 - e)*e
+					likeMatrix[3*ind + 1, s] = (1 - e)*(1 - e) + e*e
+					likeMatrix[3*ind + 2, s] = (1 - e)*e
+				else:
+					likeMatrix[3*ind, s] = e*e
+					likeMatrix[3*ind + 1, s] = 2*(1 - e)*e
+					likeMatrix[3*ind + 2, s] = (1 - e)*(1 - e)					

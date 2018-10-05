@@ -29,11 +29,11 @@ def gProbGeno(likeMatrix, indF, delta, S, N, G):
 		# Find genotypes with highest probability
 		for s in xrange(n):
 			if (probMatrix[0, s] == probMatrix[1, s]) & (probMatrix[0, s] == probMatrix[2, s]):
-				G[ind, s] = 9
+				G[ind, s] = -9
 				continue
 			geno = np.argmax(probMatrix[:, s])
 			if probMatrix[geno, s] < delta:
-				G[ind, s] = 9
+				G[ind, s] = -9
 			else:
 				G[ind, s] = geno
 
@@ -55,11 +55,11 @@ def gProbGenoInbreeding(likeMatrix, indF, F, delta, S, N, G):
 		# Find genotypes with highest probability
 		for s in xrange(n):
 			if (probMatrix[0, s] == probMatrix[1, s]) & (probMatrix[0, s] == probMatrix[2, s]):
-				G[ind, s] = 9
+				G[ind, s] = -9
 				continue
 			geno = np.argmax(probMatrix[:, s])
 			if probMatrix[geno, s] < delta:
-				G[ind, s] = 9
+				G[ind, s] = -9
 			else:
 				G[ind, s] = geno
 

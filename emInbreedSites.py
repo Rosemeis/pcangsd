@@ -20,28 +20,41 @@ from math import log
 @jit("void(f4[:, :], f4[:, :], i8, i8, f8[:])", nopython=True, nogil=True, cache=True)
 def inbreedSitesEM_inner(likeMatrix, indF, S, N, F):
 	m, n = indF.shape # Dimensions
-	probMatrix = np.empty((3, m)) # Container for posterior probabilities
+	probVec = np.zeros(3) # Container for posterior probabilities
+	priorVec = np.empty(3) # Container for prior probabilities
 
 	for s in xrange(S, min(S+N, n)):
 		expH = 0
+		tempVec = np.empty(3)
 
-		# Estimate posterior probabilities
 		for ind in xrange(m):
-			probMatrix[0, ind] = max(0, likeMatrix[3*ind, s]*((1 - indF[ind, s])*(1 - indF[ind, s]) + (1 - indF[ind, s])*indF[ind, s]*F[s]))
-			probMatrix[1, ind] = max(0, likeMatrix[3*ind + 1, s]*2*indF[ind, s]*(1 - indF[ind, s])*(1 - F[s]))
-			probMatrix[2, ind] = max(0, likeMatrix[3*ind + 2, s]*(indF[ind, s]*indF[ind, s] + (1 - indF[ind, s])*indF[ind, s]*F[s]))
-			sumNorm = np.sum(probMatrix[:, ind])
+			Fadj = (1 - indF[ind, s])*indF[ind, s]*F[s]
+			priorVec[0] = max(1e-4, (1 - indF[ind, s])*(1 - indF[ind, s]) + Fadj)
+			priorVec[1] = max(1e-4, 2*indF[ind, s]*(1 - indF[ind, s]) - 2*Fadj)
+			priorVec[2] = max(1e-4, indF[ind, s]*indF[ind, s] + Fadj)
+			priorVec /= np.sum(priorVec)
 
-			# Normalize posteriors
-			if sumNorm > 0:
-				probMatrix[1, ind] /= sumNorm
-			probMatrix[1, ind] = max(1e-4, probMatrix[1, ind]) # Fix lower boundary
+			# Estimate posterior probabilities
+			tempVec[0] = likeMatrix[3*ind, s]*priorVec[0]
+			tempVec[1] = likeMatrix[3*ind + 1, s]*priorVec[1]
+			tempVec[2] = likeMatrix[3*ind + 2, s]*priorVec[2]
+			tempVec /= np.sum(tempVec)
 
-			# Expected number of heterozygotes
+			# Counts of heterozygotes
 			expH += 2*indF[ind, s]*(1 - indF[ind, s])
-		
+			probVec += tempVec
+
+		# ANGSD procedure
+		probVec /= m
+		probVec[0] = max(1e-4, probVec[0])
+		probVec[1] = max(1e-4, probVec[1])
+		probVec[2] = max(1e-4, probVec[2])
+		probVec /= np.sum(probVec)
+
 		# Update the inbreeding coefficient
-		F[s] = 1 - (np.sum(probMatrix[1, :])/expH)
+		F[s] = 1 - (m*probVec[1]/expH)
+		F[s] = max(-1.0, F[s])
+		F[s] = min(1.0, F[s])
 
 # Loglikelihood estimates
 @jit("void(f4[:, :], f4[:, :], f8[:], i8, i8, f8[:], f8[:])", nopython=True, nogil=True, cache=True)
@@ -49,19 +62,25 @@ def loglike(likeMatrix, indF, F, S, N, logAlt, logNull):
 	m, n = indF.shape # Dimensions
 	likeAlt = np.zeros(3)
 	likeNull = np.zeros(3)
+	priorVec = np.empty(3) # Container for prior probabilities
 
 	for s in xrange(S, min(S+N, n)):
 		for ind in xrange(m):
-			# Alternative model
-			likeAlt[0] = max(0, likeMatrix[3*ind, s]*((1 - indF[ind, s])*(1 - indF[ind, s]) + (1 - indF[ind, s])*indF[ind, s]*F[s]))
-			likeAlt[1] = max(0, likeMatrix[3*ind + 1, s]*(2*indF[ind, s]*(1 - indF[ind, s])*(1 - F[s])))
-			likeAlt[2] = max(0, likeMatrix[3*ind + 2, s]*(indF[ind, s]*indF[ind, s] + (1 - indF[ind, s])*indF[ind, s]*F[s]))
-			sumAlt = np.sum(likeAlt)
+			### Alternative model
+			# Priors
+			Fadj = (1 - indF[ind, s])*indF[ind, s]*F[s]
+			priorVec[0] = max(1e-4, (1 - indF[ind, s])*(1 - indF[ind, s]) + Fadj)
+			priorVec[1] = max(1e-4, 2*indF[ind, s]*(1 - indF[ind, s]) - 2*Fadj)
+			priorVec[2] = max(1e-4, indF[ind, s]*indF[ind, s] + Fadj)
+			priorVec /= np.sum(priorVec)
 
-			if sumAlt > 0:
-				logAlt[s] += log(sumAlt)
+			# Posteriors
+			likeAlt[0] = likeMatrix[3*ind, s]*priorVec[0]
+			likeAlt[1] = likeMatrix[3*ind + 1, s]*priorVec[1]
+			likeAlt[2] = likeMatrix[3*ind + 2, s]*priorVec[2]
+			logAlt[s] += log(np.sum(likeAlt))
 
-			# Null model
+			### Null model
 			likeNull[0] = likeMatrix[3*ind, s]*(1 - indF[ind, s])*(1 - indF[ind, s])
 			likeNull[1] = likeMatrix[3*ind + 1, s]*2*indF[ind, s]*(1 - indF[ind, s])
 			likeNull[2] = likeMatrix[3*ind + 2, s]*indF[ind, s]*indF[ind, s]
@@ -70,7 +89,7 @@ def loglike(likeMatrix, indF, F, S, N, logAlt, logNull):
 # EM algorithm for estimation of inbreeding coefficients
 def inbreedSitesEM(likeMatrix, indF, EM=200, EM_tole=1e-4, t=1):
 	m, n = indF.shape # Dimensions
-	F = np.ones(n)*0.25 # Initialization of inbreeding coefficients
+	F = np.zeros(n) # Initialization of inbreeding coefficients
 	F_prev = np.copy(F)
 
 	# Multithreading parameters
@@ -105,6 +124,6 @@ def inbreedSitesEM(likeMatrix, indF, EM=200, EM_tole=1e-4, t=1):
 	for thread in threads:
 		thread.join()
 
-	lrt = 2*logAlt - 2*logNull
+	lrt = 2*(logAlt - logNull)
 
 	return F, lrt

@@ -28,8 +28,9 @@ def hweTest_inner(likeMatrix, indF, S, N, H):
 			expH[2] += indF[ind, s]*indF[ind, s]
 		probMatrix /= np.sum(probMatrix, axis=0)
 
+		# Chi square goodness-of-fit test with continuity correction
 		for g in xrange(3):
-			H[s] += ((np.sum(probMatrix[g, :]) - expH[g])**2)/expH[g]
+			H[s] += ((np.sum(probMatrix[g, :]) - expH[g])**2 - 0.25)/expH[g]
 
 
 # Estimate observed and expected counts of genotypes and compute chi2 test statistic

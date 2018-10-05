@@ -46,28 +46,43 @@ def inbreedEM_inner1(likeMatrix, indF, S, N, F):
 @jit("void(f4[:, :], f4[:, :], i8, i8, f8[:])", nopython=True, nogil=True, cache=True)
 def inbreedEM_inner2(likeMatrix, indF, S, N, F):
 	m, n = indF.shape # Dimensions
-	probMatrix = np.empty((3, n)) # Container for posterior probabilities
+	probVec = np.empty(3) # Container for posterior probabilities
+	priorVec = np.empty(3) # Container for prior probabilities
 
 	for ind in xrange(S, min(S+N, m)):
 		expH = 0
+		tempVec = np.empty(3)
 
-		# Estimate posterior probabilities
 		for s in xrange(n):
-			probMatrix[0, s] = max(0, likeMatrix[3*ind, s]*((1 - indF[ind, s])*(1 - indF[ind, s]) + (1 - indF[ind, s])*indF[ind, s]*F[ind]))
-			probMatrix[1, s] = max(0, likeMatrix[3*ind + 1, s]*2*indF[ind, s]*(1 - indF[ind, s])*(1 - F[ind]))
-			probMatrix[2, s] = max(0, likeMatrix[3*ind + 2, s]*(indF[ind, s]*indF[ind, s] + (1 - indF[ind, s])*indF[ind, s]*F[ind]))
-			sumNorm = np.sum(probMatrix[:, s])
+			# Normalize priors
+			Fadj = (1 - indF[ind, s])*indF[ind, s]*F[ind]
+			priorVec[0] = max(1e-4, (1 - indF[ind, s])*(1 - indF[ind, s]) + Fadj)
+			priorVec[1] = max(1e-4, 2*indF[ind, s]*(1 - indF[ind, s]) - 2*Fadj)
+			priorVec[2] = max(1e-4, indF[ind, s]*indF[ind, s] + Fadj)
+			priorVec /= np.sum(priorVec)
 
-			# Normalize posteriors
-			if sumNorm > 0:
-				probMatrix[1, s] /= sumNorm
-			probMatrix[1, s] = max(1e-4, probMatrix[1, s]) # Fix lower boundary
+			# Estimate posterior probabilities
+			tempVec[0] = likeMatrix[3*ind, s]*priorVec[0]
+			tempVec[1] = likeMatrix[3*ind + 1, s]*priorVec[1]
+			tempVec[2] = likeMatrix[3*ind + 2, s]*priorVec[2]
+			tempVec /= np.sum(tempVec)
 
-			# Expected number of heterozygotes
+			# ANGSD procedure
+			probVec += tempVec
+
+			# Counts of heterozygotes
 			expH += 2*indF[ind, s]*(1 - indF[ind, s])
 		
+		probVec /= n
+		probVec[0] = max(1e-4, probVec[0])
+		probVec[1] = max(1e-4, probVec[1])
+		probVec[2] = max(1e-4, probVec[2])
+		probVec /= np.sum(probVec)
+		
 		# Update the inbreeding coefficient
-		F[ind] = 1 - (np.sum(probMatrix[1, :])/expH)
+		F[ind] = 1 - (n*probVec[1]/expH)
+		F[s] = max(-1.0, F[s])
+		F[s] = min(1.0, F[s])
 
 # Population allele frequencies version (-iter 0) - Inner update - model 1
 @jit("void(f4[:, :], f8[:], i8, i8, f8[:])", nopython=True, nogil=True, cache=True)
@@ -101,24 +116,40 @@ def inbreedEM_inner1_noIndF(likeMatrix, f, S, N, F):
 def inbreedEM_inner2_noIndF(likeMatrix, f, S, N, F):
 	m, n = likeMatrix.shape # Dimension of likelihood matrix
 	m /= 3 # Number of individuals
-	probMatrix = np.empty((3, n)) # Container for posterior probabilities
+	probVec = np.empty(3) # Container for posterior probabilities
+	priorVec = np.empty(3) # Container for prior probabilities
 	expH = np.sum(2*f*(1 - f)) # Expected number of heterozygotes
 
 	for ind in xrange(S, min(S+N, m)):
-		# Estimate posterior probabilities
-		for s in xrange(n):
-			probMatrix[0, s] = max(0, likeMatrix[3*ind, s]*((1 - f[s])*(1 - f[s]) + (1 - f[s])*f[s]*F[ind]))
-			probMatrix[1, s] = max(0, likeMatrix[3*ind + 1, s]*2*f[s]*(1 - f[s])*(1 - F[ind]))
-			probMatrix[2, s] = max(0, likeMatrix[3*ind + 2, s]*(f[s]*f[s] + (1 - f[s])*f[s]*F[ind]))
-			sumNorm = np.sum(probMatrix[:, s])
+		tempVec = np.empty(3)
 
-			# Normalize posteriors
-			if sumNorm > 0:
-				probMatrix[1, s] /= sumNorm
-			probMatrix[1, s] = max(1e-4, probMatrix[1, s]) # Fix lower boundary
+		for s in xrange(n):
+			# Normalize priors
+			Fadj = (1 - f[s])*f[s]*F[ind]
+			priorVec[0] = max(1e-4, (1 - f[s])*(1 - f[s]) + Fadj)
+			priorVec[1] = max(1e-4, 2*f[s]*(1 - f[s]) - 2*Fadj)
+			priorVec[2] = max(1e-4, f[s]*f[s] + Fadj)
+			priorVec /= np.sum(priorVec)
+
+			# Estimate posterior probabilities
+			tempVec[0] = likeMatrix[3*ind, s]*priorVec[0]
+			tempVec[1] = likeMatrix[3*ind + 1, s]*priorVec[1]
+			tempVec[2] = likeMatrix[3*ind + 2, s]*priorVec[2]
+			tempVec /= np.sum(tempVec)
+
+			# ANGSD procedure
+			probVec += tempVec
+		
+		probVec /= n
+		probVec[0] = max(1e-4, probVec[0])
+		probVec[1] = max(1e-4, probVec[1])
+		probVec[2] = max(1e-4, probVec[2])
+		probVec /= np.sum(probVec)
 		
 		# Update the inbreeding coefficient
-		F[ind] = 1 - (np.sum(probMatrix[1, :])/expH)
+		F[ind] = 1 - (n*probVec[1]/expH)
+		F[s] = max(-1.0, F[s])
+		F[s] = min(1.0, F[s])
 
 
 # EM algorithm for estimation of inbreeding coefficients

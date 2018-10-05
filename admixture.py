@@ -71,8 +71,7 @@ def admixNMF(X, K, likeMatrix, alpha=0, iter=100, tole=5e-5, seed=0, batch=5, th
 	# Initiate matrices
 	Q = np.random.rand(m, K).astype(np.float32, copy=False)
 	Q /= np.sum(Q, axis=1, keepdims=True)
-	F = np.dot(np.linalg.inv(np.dot(Q.T, Q)), np.dot(Q.T, X)).T
-	F.clip(min=1e-4, max=1-(1e-4), out=F)
+	F = np.random.rand(n, K).astype(np.float32, copy=False)
 	prevQ = np.copy(Q)
 
 	# Multithreading parameters

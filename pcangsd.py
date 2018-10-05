@@ -103,7 +103,7 @@ parser.add_argument("-threads", metavar="INT", type=int, default=1,
 parser.add_argument("-o", metavar="OUTPUT", help="Prefix output file name", default="pcangsd")
 args = parser.parse_args()
 
-print "PCAngsd 0.95"
+print "PCAngsd 0.955"
 print "Using " + str(args.threads) + " thread(s)"
 
 # Setting up workflow parameters
@@ -148,7 +148,7 @@ if args.beagle != None:
 if args.minMaf > 0.0:
 	mask = (f >= args.minMaf) & (f <= 1-args.minMaf)
 	print "Number of sites after MAF filtering (" + str(args.minMaf) + "): " + str(np.sum(mask))
-
+	
 	# Update arrays
 	f = np.compress(mask, f)
 	likeMatrix = np.compress(mask, likeMatrix, axis=1)
@@ -333,23 +333,23 @@ if args.geno != None:
 	print "\n" + "Calling genotypes with a threshold of " + str(args.geno)
 
 	# Call genotypes and save data frame
-	genotypesDF = pd.DataFrame(callGeno(likeMatrix, indf, None, args.geno, args.threads).T)
-	genotypesDF.to_csv(str(args.o) + ".geno.gz", "\t", header=False, index=False, compression="gzip")
-	print "Saved called genotypes as " + str(args.o) + ".geno.gz"
+	G = callGeno(likeMatrix, indf, None, args.geno, args.threads).T
+	np.save(str(args.o) + ".geno", G)
+	print "Saved called genotypes as " + str(args.o) + ".geno.npy (Binary)"
 
 	# Release memory
-	del genotypesDF
+	del G
 
 elif args.genoInbreed != None:
 	print "\n" + "Calling genotypes with a threshold of " + str(args.genoInbreed)
 
 	# Call genotypes and save data frame
-	genotypesDF = pd.DataFrame(callGeno(likeMatrix, indf, F, args.genoInbreed, args.threads).T)
-	genotypesDF.to_csv(str(args.o) + ".genoInbreed.gz", "\t", header=False, index=False, compression="gzip")
-	print "Saved called genotypes as " + str(args.o) + ".genoInbreed.gz"
+	G = callGeno(likeMatrix, indf, F, args.genoInbreed, args.threads).T
+	np.save(str(args.o) + ".genoInbreed", G)
+	print "Saved called genotypes as " + str(args.o) + ".genoInbreed.npy (Binary)"
 
 	# Release memory
-	del genotypesDF
+	del G
 
 
 ##### Admixture proportions #####
