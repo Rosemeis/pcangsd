@@ -60,7 +60,7 @@ def updateQ(Q, A, QB, alpha):
 			Q[i, k] = min(Q[i, k], 1-(1e-4))
 
 # Estimate admixture using non-negative matrix factorization
-def admixNMF(X, K, likeMatrix, alpha=0, iter=100, tole=5e-5, seed=0, batch=5, threads=1):
+def admixNMF(X, K, likeMatrix, alpha=0, iter=100, tole=5e-5, seed=None, batch=5, threads=1):
 	m, n = X.shape # Dimensions of individual allele frequencies
 
 	# Shuffle individual allele frequencies
@@ -156,14 +156,14 @@ def alphaSearch(aEnd, depth, indF, K, likeMatrix, iter, tole, seed, batch, t):
 	Q_best, F_best, L_best = admixNMF(indF, K, likeMatrix, aMin, iter, tole, seed, batch, t)
 	argL = 0
 	aBest = aMin
-	
+
 	print "\n" + "NMF: K=" + str(K) + ", alpha=" + str(aMid) + ", batch=" + str(batch) + " and seed=" + str(seed)
 	Q_test, F_test, L_test = admixNMF(indF, K, likeMatrix, aMid, iter, tole, seed, batch, t)
 	if L_test > L_best:
 		Q_best, F_best, L_best = np.copy(Q_test), np.copy(F_test), L_test
 		argL = 1
 		aBest = aMid
-	
+
 	print "\n" + "NMF: K=" + str(K) + ", alpha=" + str(aMax) + ", batch=" + str(batch) + " and seed=" + str(seed)
 	Q_test, F_test, L_test = admixNMF(indF, K, likeMatrix, aMax, iter, tole, seed, batch, t)
 	if L_test > L_best:

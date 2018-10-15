@@ -76,7 +76,7 @@ parser.add_argument("-admix_alpha", metavar="FLOAT-LIST", type=float, nargs="+",
 	help="Sparseness parameter for NMF in estimation of admixture proportions")
 parser.add_argument("-admix_seed", metavar="INT-LIST", type=int, nargs="+", default=[None],
 	help="Random seed for admixture estimation")
-parser.add_argument("-admix_K", metavar="INT", type=int,
+parser.add_argument("-admix_K", metavar="INT-LIST", type=int, nargs="+", default=[],
 	help="Number of ancestral population for admixture estimation")
 parser.add_argument("-admix_iter", metavar="INT", type=int, default=100,
 	help="Maximum iterations for admixture estimation - NMF (100)")
@@ -354,55 +354,53 @@ elif args.genoInbreed != None:
 
 ##### Admixture proportions #####
 if args.admix:
-	if args.admix_K != None:
-		K = args.admix_K
+	if len(args.admix_K) < 1:
+		K_list = [nEV + 1, ]
 	else:
-		K = nEV + 1
+		K_list = args.admix_K
 
-	if args.admix_seed[0] == None:
-		from time import time
-		S_list = [int(time())]
-	else:
-		S_list = args.admix_seed
+	S_list = args.admix_seed
 
-	# Automatic search for optimal alpha parameter
-	if args.admix_auto != None:
-		print "\n" + ""
-		Q_admix, F_admix, a_best = alphaSearch(args.admix_auto, args.admix_depth, indf, K, likeMatrix, args.admix_iter, args.admix_tole, S_list[0], args.admix_batch, args.threads)
-		pd.DataFrame(Q_admix).to_csv(str(args.o) + ".K" + str(K) + ".a" + str(a_best) + ".qopt", sep=" ", header=False, index=False)
-		print "Saved admixture proportions as " + str(args.o) + ".K" + str(K) + ".a" + str(a_best) + ".qopt"
+	for K in K_list:
+		# Automatic search for optimal alpha parameter
+		if args.admix_auto != None:
+			print "\n" + ""
+			Q_admix, F_admix, a_best = alphaSearch(args.admix_auto, args.admix_depth, indf, K, likeMatrix, args.admix_iter, args.admix_tole, S_list[0], args.admix_batch, args.threads)
+			pd.DataFrame(Q_admix).to_csv(str(args.o) + ".K" + str(K) + ".a" + str(a_best) + ".qopt", sep=" ", header=False, index=False)
+			print "Saved admixture proportions as " + str(args.o) + ".K" + str(K) + ".a" + str(a_best) + ".qopt"
 
-		if args.admix_save:
-			if args.admix_seed[0] == None:
-				np.save(str(args.o) + ".K" + str(K) + ".a" + str(a_best) + ".fopt", F_admix)
-				print "Saved population-specific allele frequencies as " + str(args.o) + ".K" + str(K) + ".a" + str(a_best) + ".fopt.npy (Binary)"
-
-	# Standard admixture estimation
-	else:
-		for a in args.admix_alpha:
-			for s in S_list:
-				print "\n" + "Estimating admixture using NMF with K=" + str(K) + ", alpha=" + str(a) + ", batch=" + str(args.admix_batch) + " and seed=" + str(s)
-				Q_admix, F_admix, _ = admixNMF(indf, K, likeMatrix, a, args.admix_iter, args.admix_tole, s, args.admix_batch, args.threads)
-
-				# Save data frame
+			if args.admix_save:
 				if args.admix_seed[0] == None:
-					pd.DataFrame(Q_admix).to_csv(str(args.o) + ".K" + str(K) + ".a" + str(a) + ".qopt", sep=" ", header=False, index=False)
-					print "Saved admixture proportions as " + str(args.o) + ".K" + str(K) + ".a" + str(a) + ".qopt"
-				else:
-					pd.DataFrame(Q_admix).to_csv(str(args.o) + ".K" + str(K) + ".a" + str(a) + ".s" + str(s) + ".qopt", sep=" ", header=False, index=False)
-					print "Saved admixture proportions as " + str(args.o) + ".K" + str(K) + ".a" + str(a) + ".s" + str(s) + ".qopt"
+					np.save(str(args.o) + ".K" + str(K) + ".a" + str(a_best) + ".fopt", F_admix)
+					print "Saved population-specific allele frequencies as " + str(args.o) + ".K" + str(K) + ".a" + str(a_best) + ".fopt.npy (Binary)"
+			del Q_admix
+			del F_admix
+		# Standard admixture estimation
+		else:
+			for a in args.admix_alpha:
+				for s in S_list:
+					print "\n" + "Estimating admixture using NMF with K=" + str(K) + ", alpha=" + str(a) + ", batch=" + str(args.admix_batch) + " and seed=" + str(s)
+					Q_admix, F_admix, _ = admixNMF(indf, K, likeMatrix, a, args.admix_iter, args.admix_tole, s, args.admix_batch, args.threads)
 
-				if args.admix_save:
+					# Save data frame
 					if args.admix_seed[0] == None:
-						np.save(str(args.o) + ".K" + str(K) + ".a" + str(a) + ".fopt", F_admix)
-						print "Saved population-specific allele frequencies as " + str(args.o) + ".K" + str(K) + ".a" + str(a) + ".fopt.npy (Binary)"
+						pd.DataFrame(Q_admix).to_csv(str(args.o) + ".K" + str(K) + ".a" + str(a) + ".qopt", sep=" ", header=False, index=False)
+						print "Saved admixture proportions as " + str(args.o) + ".K" + str(K) + ".a" + str(a) + ".qopt"
 					else:
-						np.save(str(args.o) + ".K" + str(K) + ".a" + str(a) + ".s" + str(s) + ".fopt", F_admix)
-						print "Saved population-specific allele frequencies as " + str(args.o) + ".K" + str(K) + ".a" + str(a) + ".s" + str(s) + ".fopt.npy (Binary)"
+						pd.DataFrame(Q_admix).to_csv(str(args.o) + ".K" + str(K) + ".a" + str(a) + ".s" + str(s) + ".qopt", sep=" ", header=False, index=False)
+						print "Saved admixture proportions as " + str(args.o) + ".K" + str(K) + ".a" + str(a) + ".s" + str(s) + ".qopt"
 
-				# Release memory
-				del Q_admix
-				del F_admix
+					if args.admix_save:
+						if args.admix_seed[0] == None:
+							np.save(str(args.o) + ".K" + str(K) + ".a" + str(a) + ".fopt", F_admix)
+							print "Saved population-specific allele frequencies as " + str(args.o) + ".K" + str(K) + ".a" + str(a) + ".fopt.npy (Binary)"
+						else:
+							np.save(str(args.o) + ".K" + str(K) + ".a" + str(a) + ".s" + str(s) + ".fopt", F_admix)
+							print "Saved population-specific allele frequencies as " + str(args.o) + ".K" + str(K) + ".a" + str(a) + ".s" + str(s) + ".fopt.npy (Binary)"
+
+					# Release memory
+					del Q_admix
+					del F_admix
 
 
 ##### Optional saves #####
