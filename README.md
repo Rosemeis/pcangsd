@@ -43,4 +43,4 @@ New functionality for using PLINK files has been added (version 0.9). Genotypes 
 
 ## Citation
 Please cite our paper in GENETICS:
-Inferring Population Structure and Admixture Proportions in Low-Depth NGS Data](http://www.genetics.org/content/210/2/719).
+[Inferring Population Structure and Admixture Proportions in Low-Depth NGS Data](http://www.genetics.org/content/210/2/719).
