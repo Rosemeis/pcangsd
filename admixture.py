@@ -15,15 +15,14 @@ from math import log
 # Estimate log likelihood of ngsAdmix model (inner)
 @jit("void(f4[:, :], f4[:, :], i8, i8, f8[:])", nopython=True, nogil=True, cache=True)
 def logLike_admixInner(likeMatrix, Pi, S, N, L):
-	m, n = likeMatrix.shape
-	m /= 3
-	temp = np.empty(3) # Container for each genotype
+	m, n = Pi.shape
+
 	for ind in xrange(S, min(S+N, m)):
 		for s in xrange(n):
-			temp[0] = likeMatrix[3*ind, s]*(1 - Pi[ind, s])*(1 - Pi[ind, s])
-			temp[1] = likeMatrix[3*ind+1, s]*2*Pi[ind, s]*(1 - Pi[ind, s])
-			temp[2] = likeMatrix[3*ind+2, s]*Pi[ind, s]*Pi[ind, s]
-			L[ind] += log(np.sum(temp))
+			like0 = likeMatrix[3*ind, s]*(1 - Pi[ind, s])*(1 - Pi[ind, s])
+			like1 = likeMatrix[3*ind+1, s]*2*Pi[ind, s]*(1 - Pi[ind, s])
+			like2 = likeMatrix[3*ind+2, s]*Pi[ind, s]*Pi[ind, s]
+			L[ind] += log(like0 + like1 + like2)
 
 # Estimate log likelihood of ngsAdmix model (outer)
 def logLike_admix(likeMatrix, Pi, chunks, chunk_N):
@@ -71,8 +70,8 @@ def admixNMF(X, K, likeMatrix, alpha=0, iter=100, tole=5e-5, seed=0, batch=5, th
 	# Initiate matrices
 	Q = np.random.rand(m, K).astype(np.float32, copy=False)
 	Q /= np.sum(Q, axis=1, keepdims=True)
-	F = np.random.rand(n, K).astype(np.float32, copy=False)
 	prevQ = np.copy(Q)
+	F = np.dot(np.dot(np.linalg.inv(np.dot(Q.T, Q)), Q.T), X).T
 
 	# Multithreading parameters
 	chunk_N = int(np.ceil(float(m)/threads))
@@ -82,12 +81,12 @@ def admixNMF(X, K, likeMatrix, alpha=0, iter=100, tole=5e-5, seed=0, batch=5, th
 	batch_N = int(np.ceil(float(n)/batch))
 	bIndex = np.arange(0, n, batch_N)
 
-	# ASG-MU
+	# SG-MU
 	for iteration in xrange(1, iter + 1):
-		perm = np.random.permutation(batch)
-		for b in bIndex[perm]:
+		for b in bIndex:
 			bEnd = min(b + batch_N, n)
 			Xbatch = X[:, b:bEnd]
+			Fbatch = F[b:bEnd]
 			nInner = Xbatch.shape[1]
 			pF = 2*(1 + (m*nInner + m*K)/(nInner*K + nInner))
 			pQ = 2*(1 + (m*nInner + nInner*K)/(m*K + m))
@@ -96,18 +95,18 @@ def admixNMF(X, K, likeMatrix, alpha=0, iter=100, tole=5e-5, seed=0, batch=5, th
 			A = np.dot(Xbatch.T, Q)
 			B = np.dot(Q.T, Q)
 			for inner in xrange(pF): # Acceleration updates
-				F_prev = np.copy(F[b:bEnd])
-				updateF(F[b:bEnd], A, np.dot(F[b:bEnd], B))
+				F_prev = np.copy(Fbatch)
+				updateF(Fbatch, A, np.dot(Fbatch, B))
 
 				if inner == 0:
-					F_init = frobenius(F[b:bEnd], F_prev)
+					F_init = frobenius(Fbatch, F_prev)
 				else:
-					if (frobenius(F[b:bEnd], F_prev) <= (0.1*F_init)):
+					if (frobenius(Fbatch, F_prev) <= (0.1*F_init)):
 						break
 
 			# Update Q
-			A = np.dot(Xbatch, F[b:bEnd])
-			B = np.dot(F[b:bEnd].T, F[b:bEnd])
+			A = np.dot(Xbatch, Fbatch)
+			B = np.dot(Fbatch.T, Fbatch)
 			for inner in xrange(pQ): # Acceleration updates
 				Q_prev = np.copy(Q)
 				updateQ(Q, A, np.dot(Q, B), alpha)
@@ -121,14 +120,14 @@ def admixNMF(X, K, likeMatrix, alpha=0, iter=100, tole=5e-5, seed=0, batch=5, th
 
 		# Measure difference
 		diff = rmse2d_float32(Q, prevQ)
-		print "ASG-MU (" + str(iteration) + "). Q-RMSD=" + str(diff)
+		print "CSG-MU (" + str(iteration) + "). Q-RMSD=" + str(diff)
 
 		if diff < tole:
-			print "ASG-MU has converged."
+			print "CSG-MU has converged."
 			break
 		prevQ = np.copy(Q)
 
-	del perm, prevQ, A, B, F_prev, Q_prev
+	del prevQ, A, B, F_prev, Q_prev
 
 	# Reshuffle columns
 	F = F[np.argsort(shuffleX)]

@@ -9,9 +9,9 @@ __author__ = "Jonas Meisner"
 
 # Import libraries
 import numpy as np
+import threading
 from math import sqrt
 from numba import jit
-import threading
 
 # Normalize the posterior expectations of the genotypes
 @jit("void(f4[:, :], f8[:], i8, i8, f8[:, :])", nopython=True, nogil=True, cache=True)
@@ -22,13 +22,16 @@ def normalizeGeno(expG, f, S, N, X):
 			X[ind, s] = (expG[ind, s] - 2*f[s])/sqrt(2*f[s]*(1 - f[s]))
 
 # Selection scan
-def selectionScan(expG, f, C, nEV, model=1, threads=1):
+def selectionScan(expG, f, C, nEV, V=None, Sigma=None, model=1, threads=1):
 	# Perform eigendecomposition on covariance matrix
 	m, n = expG.shape
-	eigVals, eigVecs = np.linalg.eigh(C) # Eigendecomposition (Symmetric)
-	sort = np.argsort(eigVals)[::-1] # Sorting vector
-	l = eigVals[sort[:nEV]] # Sorted eigenvalues
-	V = eigVecs[:, sort[:nEV]] # Sorted eigenvectors
+
+	# Check for relatedness correction
+	if V is None:
+		eigVals, eigVecs = np.linalg.eigh(C) # Eigendecomposition (Symmetric)
+		sort = np.argsort(eigVals)[::-1] # Sorting vector
+		Sigma = eigVals[sort[:nEV]] # Sorted eigenvalues
+		V = eigVecs[:, sort[:nEV]] # Sorted eigenvectors
 
 	chunk_N = int(np.ceil(float(m)/threads))
 	chunks = [i * chunk_N for i in xrange(threads)]
@@ -49,7 +52,7 @@ def selectionScan(expG, f, C, nEV, model=1, threads=1):
 		# Compute p-values for each PC in each site
 		for eigVec in xrange(nEV):
 			# Weighted SNPs are chi-square distributed with df = 1
-			test[eigVec] = (1.0/l[eigVec])*(np.dot(X.T, V[:, eigVec])**2)
+			test[eigVec] = (1.0/Sigma[eigVec])*(np.dot(X.T, V[:, eigVec])**2)
 
 
 	elif model==2: # PCAdapt

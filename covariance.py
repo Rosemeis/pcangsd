@@ -19,95 +19,78 @@ from helpFunctions import rmse2d_float32
 def updateFumagalli(likeMatrix, f, S, N, expG):
 	m, n = likeMatrix.shape # Dimension of likelihood matrix
 	m /= 3 # Number of individuals
-	probMatrix = np.empty((3, n), dtype=np.float32)
 
-	# Loop over individuals
 	for ind in xrange(S, min(S+N, m)):
 		# Estimate posterior probabilities
 		for s in xrange(n):
-			probMatrix[0, s] = likeMatrix[3*ind, s]*(1 - f[s])*(1 - f[s])
-			probMatrix[1, s] = likeMatrix[3*ind+1, s]*2*f[s]*(1 - f[s])
-			probMatrix[2, s] = likeMatrix[3*ind+2, s]*f[s]*f[s]
-		probMatrix /= np.sum(probMatrix, axis=0)
+			p0 = likeMatrix[3*ind, s]*(1 - f[s])*(1 - f[s])
+			p1 = likeMatrix[3*ind+1, s]*2*f[s]*(1 - f[s])
+			p2 = likeMatrix[3*ind+2, s]*f[s]*f[s]
+			pSum = p0 + p1 + p2
 
-		# Estimate genotype dosages
-		for s in xrange(n):
-			expG[ind, s] = 0.0
-			for g in xrange(3):
-				expG[ind, s] += probMatrix[g, s]*g
+			# Update dosage
+			expG[ind, s] = (p1 + 2*p2)/pSum
 
 # Estimate posterior expecations of the genotypes and covariance matrix diagonal (Fumagalli method)
 @jit("void(f4[:, :], f8[:], i8, i8, f4[:, :], f8[:])", nopython=True, nogil=True, cache=True)
 def covFumagalli(likeMatrix, f, S, N, expG, diagC):
 	m, n = likeMatrix.shape # Dimension of likelihood matrix
 	m /= 3 # Number of individuals
-	probMatrix = np.empty((3, n), dtype=np.float32)
 
-	# Loop over individuals
 	for ind in xrange(S, min(S+N, m)):
+		diagC[ind] = 0.0
+
 		# Estimate posterior probabilities
 		for s in xrange(n):
-			probMatrix[0, s] = likeMatrix[3*ind, s]*(1 - f[s])*(1 - f[s])
-			probMatrix[1, s] = likeMatrix[3*ind+1, s]*2*f[s]*(1 - f[s])
-			probMatrix[2, s] = likeMatrix[3*ind+2, s]*f[s]*f[s]
-		probMatrix /= np.sum(probMatrix, axis=0)
+			p0 = likeMatrix[3*ind, s]*(1 - f[s])*(1 - f[s])
+			p1 = likeMatrix[3*ind+1, s]*2*f[s]*(1 - f[s])
+			p2 = likeMatrix[3*ind+2, s]*f[s]*f[s]
+			pSum = p0 + p1 + p2
 
-		# Estimate genotype dosages and diagonal of GRM
-		diagC[ind] = 0.0
-		for s in xrange(n):
-			expG[ind, s] = 0.0
-			temp = 0.0
-			for g in xrange(3):
-				expG[ind, s] += probMatrix[g, s]*g
-				temp += (g - 2*f[s])*(g - 2*f[s])*probMatrix[g, s]
+			# Update dosage and diagonal of GRM
+			expG[ind, s] = (p1 + 2*p2)/pSum
+			temp = (0 - 2*f[s])*(0 - 2*f[s])*p0
+			temp += (1 - 2*f[s])*(1 - 2*f[s])*p1
+			temp += (2 - 2*f[s])*(2 - 2*f[s])*p2
 			diagC[ind] += temp/(2*f[s]*(1 - f[s]))
 		diagC[ind] /= n
 
 # Update posterior expectations of the genotypes (PCAngsd)
 @jit("void(f4[:, :], f4[:, :], i8, i8, f4[:, :])", nopython=True, nogil=True, cache=True)
 def updatePCAngsd(likeMatrix, indF, S, N, expG):
-	m, n = likeMatrix.shape # Dimension of likelihood matrix
-	m /= 3 # Number of individuals
-	probMatrix = np.empty((3, n), dtype=np.float32)
+	m, n = indF.shape # Dimensions
 
-	# Loop over individuals
 	for ind in xrange(S, min(S+N, m)):
 		# Estimate posterior probabilities
 		for s in xrange(n):
-			probMatrix[0, s] = likeMatrix[3*ind, s]*(1 - indF[ind, s])*(1 - indF[ind, s])
-			probMatrix[1, s] = likeMatrix[3*ind+1, s]*2*indF[ind, s]*(1 - indF[ind, s])
-			probMatrix[2, s] = likeMatrix[3*ind+2, s]*indF[ind, s]*indF[ind, s]
-		probMatrix /= np.sum(probMatrix, axis=0)
+			p0 = likeMatrix[3*ind, s]*(1 - indF[ind, s])*(1 - indF[ind, s])
+			p1 = likeMatrix[3*ind+1, s]*2*indF[ind, s]*(1 - indF[ind, s])
+			p2 = likeMatrix[3*ind+2, s]*indF[ind, s]*indF[ind, s]
+			pSum = p0 + p1 + p2
 
-		# Estimate genotype dosages
-		for s in xrange(n):
-			expG[ind, s] = 0.0
-			for g in xrange(3):
-				expG[ind, s] += probMatrix[g, s]*g
+			# Update dosage
+			expG[ind, s] = (p1 + 2*p2)/pSum
 
 # Estimate posterior expecations of the genotypes and covariance matrix diagonal (PCAngsd)
 @jit("void(f4[:, :], f4[:, :], f8[:], i8, i8, f4[:, :], f8[:])", nopython=True, nogil=True, cache=True)
 def covPCAngsd(likeMatrix, indF, f, S, N, expG, diagC):
-	m, n = likeMatrix.shape # Dimension of likelihood matrix
-	m /= 3 # Number of individuals
-	probMatrix = np.empty((3, n), dtype=np.float32)
+	m, n = indF.shape # Dimensions
 
 	for ind in xrange(S, min(S+N, m)):
+		diagC[ind] = 0.0
+
 		# Estimate posterior probabilities
 		for s in xrange(n):
-			probMatrix[0, s] = likeMatrix[3*ind, s]*(1 - indF[ind, s])*(1 - indF[ind, s])
-			probMatrix[1, s] = likeMatrix[3*ind+1, s]*2*indF[ind, s]*(1 - indF[ind, s])
-			probMatrix[2, s] = likeMatrix[3*ind+2, s]*indF[ind, s]*indF[ind, s]
-		probMatrix /= np.sum(probMatrix, axis=0)
+			p0 = likeMatrix[3*ind, s]*(1 - indF[ind, s])*(1 - indF[ind, s])
+			p1 = likeMatrix[3*ind+1, s]*2*indF[ind, s]*(1 - indF[ind, s])
+			p2 = likeMatrix[3*ind+2, s]*indF[ind, s]*indF[ind, s]
+			pSum = p0 + p1 + p2
 
-		# Estimate genotype dosages and diagonal of GRM
-		diagC[ind] = 0.0
-		for s in xrange(n):
-			expG[ind, s] = 0.0
-			temp = 0.0
-			for g in xrange(3):
-				expG[ind, s] += probMatrix[g, s]*g
-				temp += (g - 2*f[s])*(g - 2*f[s])*probMatrix[g, s]
+			# Update dosage
+			expG[ind, s] = (p1 + 2*p2)/pSum
+			temp = (0 - 2*f[s])*(0 - 2*f[s])*p0
+			temp += (1 - 2*f[s])*(1 - 2*f[s])*p1
+			temp += (2 - 2*f[s])*(2 - 2*f[s])*p2
 			diagC[ind] += temp/(2*f[s]*(1 - f[s]))
 		diagC[ind] /= n
 
@@ -275,6 +258,8 @@ def PCAngsd(likeMatrix, EVs, M, f, M_tole, threads=1):
 				break
 			oldDiff = diff
 		prevW = np.copy(W)
+
+	del W, prevW
 
 	# Multithreading
 	threads = [threading.Thread(target=covPCAngsd, args=(likeMatrix, predF, f, chunk, chunk_N, expG, diagC)) for chunk in chunks]

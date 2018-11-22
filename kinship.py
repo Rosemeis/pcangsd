@@ -15,27 +15,24 @@ from math import sqrt
 # Estimate diagonal entries of kinship matrix
 @jit("void(f4[:, :], f4[:, :], i8, i8, f8[:])", nopython=True, nogil=True, cache=True)
 def diagKinship(likeMatrix, indF, S, N, diagK):
-	m, n = likeMatrix.shape # Dimension of likelihood matrix
-	m /= 3 # Number of individuals
-	probMatrix = np.empty((3, n), dtype=np.float32)
+	m, n = indF.shape # Dimensions
 
 	for ind in xrange(S, min(S+N, m)):
-		# Estimate posterior probabilities
-		for s in xrange(n):
-			probMatrix[0, s] = likeMatrix[3*ind, s]*(1 - indF[ind, s])*(1 - indF[ind, s])
-			probMatrix[1, s] = likeMatrix[3*ind+1, s]*2*indF[ind, s]*(1 - indF[ind, s])
-			probMatrix[2, s] = likeMatrix[3*ind+2, s]*indF[ind, s]*indF[ind, s]
-		probMatrix /= np.sum(probMatrix, axis=0)
-
-		# Estimate diagonal of kinship matrix
 		num = 0.0
 		dem = 0.0
+
+		# Estimate posterior probabilities and diagonal of kinship matrix
 		for s in xrange(n):
-			for g in xrange(3):
-				num += (g - 2*indF[ind, s])*(g - 2*indF[ind, s])*probMatrix[g, s]
+			p0 = likeMatrix[3*ind, s]*(1 - indF[ind, s])*(1 - indF[ind, s])
+			p1 = likeMatrix[3*ind+1, s]*2*indF[ind, s]*(1 - indF[ind, s])
+			p2 = likeMatrix[3*ind+2, s]*indF[ind, s]*indF[ind, s]
+			pSum = p0 + p1 + p2
+
+			num += (0 - 2*indF[ind, s])*(0 - 2*indF[ind, s])*(p0/pSum)
+			num += (1 - 2*indF[ind, s])*(1 - 2*indF[ind, s])*(p1/pSum)
+			num += (2 - 2*indF[ind, s])*(2 - 2*indF[ind, s])*(p2/pSum)
 			dem += indF[ind, s]*(1-indF[ind, s])
 		diagK[ind] = num/(4*dem)
-
 
 # Prepare numerator matrix
 @jit("void(f4[:, :], f4[:, :], i8, i8, f8[:, :])", nopython=True, nogil=True, cache=True)
@@ -45,7 +42,6 @@ def numeratorKin(expG, indF, S, N, X):
 		for s in xrange(n):
 			X[ind, s] = expG[ind, s] - 2*indF[ind, s]
 
-
 # Prepare denominator matrix
 @jit("void(f4[:, :], i8, i8, f8[:, :])", nopython=True, nogil=True, cache=True)
 def denominatorKin(indF, S, N, X):
@@ -53,7 +49,6 @@ def denominatorKin(indF, S, N, X):
 	for ind in xrange(S, min(S+N, m)):
 		for s in xrange(n):
 			X[ind, s] = sqrt(indF[ind, s]*(1 - indF[ind, s]))
-
 
 # Estimate full kinship matrix with biased diagonal
 def estimateKinship(expG, indF, chunks, chunk_N):

@@ -7,66 +7,85 @@ __author__ = "Jonas Meisner"
 
 # Import libraries
 import numpy as np
-from numba import jit
 import threading
+from numba import jit
 
 ##### Functions #####
 # Genotype calling without inbreeding
 @jit("void(f4[:, :], f4[:, :], f8, i8, i8, i1[:, :])", nopython=True, nogil=True, cache=True)
 def gProbGeno(likeMatrix, indF, delta, S, N, G):
-	m, n = likeMatrix.shape # Dimension of likelihood matrix
-	m /= 3 # Number of individuals
+	m, n = indF.shape # Dimensions
 	
 	for ind in xrange(S, min(S+N, m)):
 		# Estimate posterior probabilities
-		probMatrix = np.empty((3, n))
 		for s in xrange(n):
-			probMatrix[0, s] = likeMatrix[3*ind, s]*(1 - indF[ind, s])*(1 - indF[ind, s])
-			probMatrix[1, s] = likeMatrix[3*ind+1, s]*2*indF[ind, s]*(1 - indF[ind, s])
-			probMatrix[2, s] = likeMatrix[3*ind+2, s]*indF[ind, s]*indF[ind, s]
-		probMatrix /= np.sum(probMatrix, axis=0)
+			p0 = likeMatrix[3*ind, s]*(1 - indF[ind, s])*(1 - indF[ind, s])
+			p1 = likeMatrix[3*ind+1, s]*2*indF[ind, s]*(1 - indF[ind, s])
+			p2 = likeMatrix[3*ind+2, s]*indF[ind, s]*indF[ind, s]
+			pSum = p0 + p1 + p2
 
-		# Find genotypes with highest probability
-		for s in xrange(n):
-			if (probMatrix[0, s] == probMatrix[1, s]) & (probMatrix[0, s] == probMatrix[2, s]):
+			if (p0 == p1) & (p0 == p2): # If all equal
 				G[ind, s] = -9
 				continue
-			geno = np.argmax(probMatrix[:, s])
-			if probMatrix[geno, s] < delta:
-				G[ind, s] = -9
-			else:
-				G[ind, s] = geno
+
+			# Call posterior maximum
+			if p0 > p1:
+				if p0 > p2: # G = 0
+					if p0/pSum > delta:
+						G[ind, s] = 0
+					else:
+						G[ind, s] = -9
+				else: # G = 2
+					if p2/pSum > delta:
+						G[ind, s] = 2
+					else:
+						G[ind, s] = -9
+
+			else: # G = 1
+				if p1/pSum > delta:
+					G[ind, s] = 1
+				else:
+					G[ind, s] = -9
 
 # Genotype calling with inbreeding
 @jit("void(f4[:, :], f4[:, :], f4[:], f8, i8, i8, i1[:, :])", nopython=True, nogil=True, cache=True)
 def gProbGenoInbreeding(likeMatrix, indF, F, delta, S, N, G):
-	m, n = likeMatrix.shape # Dimension of likelihood matrix
-	m /= 3 # Number of individuals
+	m, n = indF.shape # Dimensions
 	
 	for ind in xrange(S, min(S+N, m)):
 		# Estimate posterior probabilities
-		probMatrix = np.empty((3, n))
 		for s in xrange(n):
-			probMatrix[0, s] = likeMatrix[3*ind, s]*((1 - indF[ind, s])*(1 - indF[ind, s]) + indF[ind, s]*(1 - indF[ind, s])*F[ind])
-			probMatrix[1, s] = likeMatrix[3*ind+1, s]*(2*indF[ind, s]*(1 - indF[ind, s])*(1 - F[ind]))
-			probMatrix[2, s] = likeMatrix[3*ind+2, s]*(indF[ind, s]*indF[ind, s] + indF[ind, S]*(1 - indF[ind, S])*F[ind])
-		probMatrix /= np.sum(probMatrix, axis=0)
+			p0 = likeMatrix[3*ind, s]*((1 - indF[ind, s])*(1 - indF[ind, s]) + indF[ind, s]*(1 - indF[ind, s])*F[ind])
+			p1 = likeMatrix[3*ind+1, s]*(2*indF[ind, s]*(1 - indF[ind, s])*(1 - F[ind]))
+			p2 = likeMatrix[3*ind+2, s]*(indF[ind, s]*indF[ind, s] + indF[ind, S]*(1 - indF[ind, S])*F[ind])
+			pSum = p0 + p1 + p2
 
-		# Find genotypes with highest probability
-		for s in xrange(n):
-			if (probMatrix[0, s] == probMatrix[1, s]) & (probMatrix[0, s] == probMatrix[2, s]):
+			if (p0 == p1) & (p0 == p2): # If all equal
 				G[ind, s] = -9
 				continue
-			geno = np.argmax(probMatrix[:, s])
-			if probMatrix[geno, s] < delta:
-				G[ind, s] = -9
-			else:
-				G[ind, s] = geno
+
+			# Call posterior maximum
+			if p0 > p1:
+				if p0 > p2: # G = 0
+					if p0/pSum > delta:
+						G[ind, s] = 0
+					else:
+						G[ind, s] = -9
+				else: # G = 2
+					if p2/pSum > delta:
+						G[ind, s] = 2
+					else:
+						G[ind, s] = -9
+
+			else: # G = 1
+				if p1/pSum > delta:
+					G[ind, s] = 1
+				else:
+					G[ind, s] = -9
 
 ##### Genotype calling #####
 def callGeno(likeMatrix, indF, F=None, delta=0.0, threads=1):
-	m, n = likeMatrix.shape # Dimension of likelihood matrix
-	m /= 3 # Number of individuals
+	m, n = indF.shape # Dimensions
 	chunk_N = int(np.ceil(float(m)/threads))
 	chunks = [i * chunk_N for i in xrange(threads)]
 
