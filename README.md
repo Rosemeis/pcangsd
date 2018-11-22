@@ -41,5 +41,6 @@ The only input PCAngsd needs is estimated genotype likelihoods in Beagle format.
 New functionality for using PLINK files has been added (version 0.9). Genotypes are automatically converted into a genotype likelihood matrix.
 
 
-## Preprint
-Inferring Population Structure and Admixture Proportions in Low Depth NGS Data - [bioRxiv.org](https://www.biorxiv.org/content/early/2018/05/23/302463).
+## Citation
+Please cite our paper in GENETICS:
+Inferring Population Structure and Admixture Proportions in Low-Depth NGS Data](http://www.genetics.org/content/210/2/719).
