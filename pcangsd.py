@@ -4,6 +4,14 @@ PCAngsd Framework: Population genetic analyses for NGS data using PCA. Main call
 
 __author__ = "Jonas Meisner"
 
+# Import libraries
+import warnings
+warnings.simplefilter(action='ignore', category=FutureWarning)
+import argparse
+import numpy as np
+import pandas as pd
+import os
+
 # Import functions
 from emMAF import *
 from covariance import *
@@ -14,19 +22,10 @@ from emInbreedSites import *
 from kinship import *
 from selection import *
 from admixture import *
-from hweChi2 import *
-
-# Import libraries
-import warnings
-warnings.simplefilter(action='ignore', category=FutureWarning)
-import argparse
-import numpy as np
-import pandas as pd
-import os.path
 
 ##### Argparse #####
 parser = argparse.ArgumentParser(prog="PCAngsd")
-parser.add_argument("--version", action="version", version="%(prog)s 0.96")
+parser.add_argument("--version", action="version", version="%(prog)s 0.97")
 parser.add_argument("-beagle", metavar="FILE",
 	help="Input file of genotype likelihoods in Beagle format (.gz)")
 parser.add_argument("-indf", metavar="FILE",
@@ -50,7 +49,8 @@ parser.add_argument("-e", metavar="INT", type=int, default=0,
 parser.add_argument("-geno", metavar="FLOAT", type=float,
 	help="Call genotypes from posterior probabilities using individual allele frequencies as prior")
 parser.add_argument("-genoInbreed", metavar="FLOAT", type=float,
-	help="Call genotypes from posterior probabilities using individual allele frequencies and inbreeding coefficients as prior")
+	help="Call genotypes from posterior probabilities using individual allele frequencies and \
+	inbreeding coefficients as prior")
 parser.add_argument("-inbreed", metavar="INT", type=int,
 	help="Compute the per-individual inbreeding coefficients by specified model")
 parser.add_argument("-inbreedSites", action="store_true",
@@ -59,8 +59,6 @@ parser.add_argument("-inbreed_iter", metavar="INT", type=int, default=200,
 	help="Maximum iterations for inbreeding coefficients estimation - EM (200)")
 parser.add_argument("-inbreed_tole", metavar="FLOAT", type=float, default=1e-4,
 	help="Tolerance for inbreeding coefficients estimation update - EM (1e-4)")
-parser.add_argument("-hwe", action="store_true",
-	help="Test for HWE")
 parser.add_argument("-HWE_filter", metavar="FILE",
 	help="Input file of LRT values in sites from HWE test")
 parser.add_argument("-HWE_tole", metavar="FLOAT", type=float, default=1e-6,
@@ -103,6 +101,8 @@ parser.add_argument("-expg_save", action="store_true",
 	help="Save genotype dosages (Binary)")
 parser.add_argument("-sites_save", action="store_true",
 	help="Save marker IDs of filtered sites")
+parser.add_argument("-post_save", action="store_true",
+	help="Save posterior genotype probabilities in BEAGLE format")
 parser.add_argument("-allocate_sites", metavar="INT", type=int, default=0,
 	help="Pre-allocate memory for specified number of sites")
 parser.add_argument("-threads", metavar="INT", type=int, default=1,
@@ -110,7 +110,7 @@ parser.add_argument("-threads", metavar="INT", type=int, default=1,
 parser.add_argument("-o", metavar="OUTPUT", help="Prefix output file name", default="pcangsd")
 args = parser.parse_args()
 
-print "PCAngsd 0.96"
+print "PCAngsd 0.97"
 print "Using " + str(args.threads) + " thread(s)"
 
 # Setting up workflow parameters
@@ -120,26 +120,32 @@ else:
 	param_kinship = False
 
 if args.genoInbreed is not None:
-	assert param_inbreed, "Inbreeding coefficients must be estimated in order to use -genoInbreed! Use -inbreed parameter!"
+	assert param_inbreed, "Inbreeding coefficients must be estimated in order to use -genoInbreed! \
+	Use -inbreed parameter!"
 
 # Check parsing
 if args.beagle is None:
 	assert (args.plink is not None), "Missing input file! (-beagle or -plink)"
 if (args.indf is not None) or (args.relatedPCA is not None):
 	assert (args.e != 0), "Specify number of eigenvectors used to estimate allele frequencies! (-e)"
-	nEV = args.e
+	e = args.e
 
 # Parse Beagle file
 if args.beagle is not None:
-	print "\n" + "Parsing Beagle file"
+	print "\nParsing Beagle file"
 	assert (os.path.isfile(args.beagle)), "Beagle file doesn't exist!"
 	assert args.beagle[-3:] == ".gz", "Beagle file must be in gzip format!"
 	from helpFunctions import readGzipBeagle
-	likeMatrix = readGzipBeagle(args.beagle, args.allocate_sites)
+
+	if args.post_save or args.sites_save:
+		pos_save = True
+	else:
+		pos_save = False
+	likeMatrix, pos, alleleMatrix = readGzipBeagle(args.beagle, args.allocate_sites, pos_save)
 else:
 	print "\n" + "Parsing PLINK files"
 	from helpFunctions import readPlink
-	(likeMatrix, f, pos) = readPlink(args.plink, args.epsilon, args.threads)
+	likeMatrix, f, pos, indList = readPlink(args.plink, args.epsilon, args.threads)
 
 m, n = likeMatrix.shape
 m /= 3
@@ -148,7 +154,7 @@ print str(m) + " samples and " + str(n) + " sites"
 
 ##### Estimate population allele frequencies #####
 if args.beagle is not None:
-	print "\n" + "Estimating population allele frequencies"
+	print "\nEstimating population allele frequencies"
 	f = alleleEM(likeMatrix, args.maf_iter, args.maf_tole, args.threads)
 
 
@@ -164,7 +170,7 @@ if args.minMaf > 0.0:
 if args.HWE_filter is not None:
 	import scipy.stats as st
 	lrtVec = pd.read_csv(args.HWE_filter, header=None, dtype=np.float, squeeze=True).as_matrix()
-	boolVec = st.chi2.sf(lrtVec, 1) > args.HWE_tole
+	boolVec = st.chi2.sf(lrtVec, 1) > args.HWE_tole # Boolean vector for HWE statistics
 	del lrtVec
 	print "Number of sites after HWE filtering (" + str(args.HWE_tole) + "): " + str(np.sum(boolVec))
 
@@ -175,9 +181,9 @@ if args.HWE_filter is not None:
 
 ##### PCAngsd - Individual allele frequencies and covariance matrix #####
 if args.relatedPCA is not None:
-	print "\n" + "Performing PCAngsd taking relatedness into account using " + str(args.e) + " principal components."
+	print "\nPerforming PCAngsd taking relatedness into account using " + str(args.e) + " principal components."
 	phi = np.genfromtxt(args.relatedPCA)
-	C, indf, expG, V, Sigma, f = relatedPCAngsd(likeMatrix, args.e, f, phi, args.related_tole, args.iter, args.tole, args.threads)
+	C, Pi, E, V, Sigma, f = relatedPCAngsd(likeMatrix, args.e, f, phi, args.related_tole, args.iter, args.tole, args.threads)
 
 	# Create and save data frames
 	pd.DataFrame(C).to_csv(str(args.o) + ".unrelated.cov", sep="\t", header=False, index=False)
@@ -187,46 +193,39 @@ if args.relatedPCA is not None:
 	print "Saved combined eigenvectors as " + str(args.o) + ".eigenvecs"
 
 elif args.indf is None:
-	print "\n" + "Estimating covariance matrix"
-	C, indf, nEV, expG = PCAngsd(likeMatrix, args.e, args.iter, f, args.tole, args.threads)
+	print "\nEstimating covariance matrix"
+	C, Pi, e, E = PCAngsd(likeMatrix, args.e, args.iter, f, args.tole, args.threads)
 
 	# Create and save data frames
 	pd.DataFrame(C).to_csv(str(args.o) + ".cov", sep="\t", header=False, index=False)
 	print "Saved covariance matrix as " + str(args.o) + ".cov"
 else:
-	print "\n" + "Parsing individual allele frequencies"
-	indf = np.load(args.indf)
-
-
-##### HWE test #####
-if args.hwe:
-	print "\n" + "Testing for HWE"
-	hwe = hweTest(likeMatrix, indf, args.threads)
-	pd.DataFrame(hwe).to_csv(str(args.o) + ".hwe", sep="\t", header=False, index=False)
-	print "Saved HWE test statistics as " + str(args.o) + ".hwe"
-
-	# Release memory
-	del hwe
+	print "\nParsing individual allele frequencies"
+	Pi = np.load(args.indf).astype(np.float32, copy=False)
 
 
 ##### Selection scan #####
 if args.selection is not None:
+	assert args.relatedPCA is None, "Can't use projected samples in selection scan!"
+
 	if args.indf is not None:
 		print "Estimating genotype dosages and covariance matrix"
-		chunk_N = int(np.ceil(float(m)/args.threads))
-		chunks = [i * chunk_N for i in xrange(args.threads)]
-		expG = np.empty(indf.shape, dtype=np.float32)
+		E = np.empty(Pi.shape, dtype=np.float32)
 		diagC = np.empty(m)
 
+		# Multithreading parameters
+		chunk_N = int(np.ceil(float(m)/args.threads))
+		chunks = [i * chunk_N for i in xrange(args.threads)]
+
 		# Multithreading
-		threads = [threading.Thread(target=covPCAngsd, args=(likeMatrix, indf, f, chunk, chunk_N, expG, diagC)) for chunk in chunks]
+		threads = [threading.Thread(target=covPCAngsd, args=(likeMatrix, Pi, f, chunk, chunk_N, E, diagC)) for chunk in chunks]
 		for thread in threads:
 			thread.start()
 		for thread in threads:
 			thread.join()
 
-		if args.altC == None:
-			C = estimateCov(expG, diagC, f, chunks, chunk_N)
+		if args.altC is None:
+			C = estimateCov(E, diagC, f, chunks, chunk_N)
 		del diagC
 
 	# Parse alternative covariance matrix if given
@@ -235,27 +234,22 @@ if args.selection is not None:
 		C = pd.read_csv(args.altC, sep="\t", header=None, dtype=np.float).as_matrix()
 		assert (m == C.shape[0]), "Number of individuals must match for alternative covariance matrix!"
 
-
 	if args.selection == 1:
-		print "\n" + "Performing selection scan using FastPCA method"
+		print "\nPerforming selection scan using FastPCA method"
 
 		# Perform selection scan and save data frame
-		if args.relatedPCA is not None:
-			sel = selectionScan(expG, f, None, nEV, V, Sigma, model=1, threads=args.threads).T
-			pd.DataFrame(sel).to_csv(str(args.o) + ".selection.gz", sep="\t", header=False, index=False, compression="gzip")
-		else:
-			sel = selectionScan(expG, f, C, nEV, model=1, threads=args.threads).T
-			pd.DataFrame(sel).to_csv(str(args.o) + ".selection.gz", sep="\t", header=False, index=False, compression="gzip")
+		sel = selectionScan(E, f, C, e, model=1, threads=args.threads).T
+		pd.DataFrame(sel).to_csv(str(args.o) + ".selection.gz", sep="\t", header=False, index=False, compression="gzip")
 		print "Saved selection statistics for the top PCs as " + str(args.o) + ".selection.gz"
 
 		# Release memory
 		del sel
 
 	elif args.selection == 2:
-		print "\n" + "Performing selection scan using PCAdapt method"
+		print "\nPerforming selection scan using PCAdapt method"
 
 		# Perform selection scan and save data frame
-		mahalanobisDF = pd.DataFrame(selectionScan(expG, f, C, nEV, model=2, threads=args.threads))
+		mahalanobisDF = pd.DataFrame(selectionScan(E, f, C, e, model=2, threads=args.threads))
 		mahalanobisDF.to_csv(str(args.o) + ".selection.gz", sep="\t", header=False, index=False, compression="gzip")
 		print "Saved selection statistics as " + str(args.o) + ".selection.gz"
 
@@ -265,27 +259,27 @@ if args.selection is not None:
 
 ##### Kinship estimation #####
 if param_kinship:
-	print "\n" + "Estimating kinship matrix"
+	print "\nEstimating kinship matrix"
 
 	# Perform kinship estimation
-	phi = kinshipConomos(likeMatrix, indf, expG, args.threads)
+	phi = kinshipConomos(likeMatrix, Pi, E, args.threads)
 	pd.DataFrame(phi).to_csv(str(args.o) + ".kinship", sep="\t", header=False, index=False)
 	print "Saved kinship matrix as " + str(args.o) + ".kinship"
 
 
 # Optional save of genotype dosages
 if args.expg_save:
-	np.save(str(args.o) + ".expg", expG.astype(float, copy=False))
+	np.save(str(args.o) + ".expg", E.astype(float, copy=False))
 	print "Saved genotype dosages as " + str(args.o) + ".expg.npy (Binary)"
 
 # Release memory
 if (args.indf is None) or (args.selection is not None):
-	del C, expG
+	del C, E
 
 
 ##### Individual inbreeding coefficients #####
 if args.inbreed == 1:
-	print "\n" + "Estimating inbreeding coefficients using maximum likelihood estimator (EM)"
+	print "\nEstimating inbreeding coefficients using maximum likelihood estimator (EM)"
 
 	# Estimating inbreeding coefficients
 	if args.iter == 0:
@@ -294,7 +288,7 @@ if args.inbreed == 1:
 		pd.DataFrame(F).to_csv(str(args.o) + ".inbreed", sep="\t", header=False, index=False)
 		print "Saved inbreeding coefficients as " + str(args.o) + ".inbreed"
 	else:
-		F = inbreedEM(likeMatrix, indf, 1, args.inbreed_iter, args.inbreed_tole)
+		F = inbreedEM(likeMatrix, Pi, 1, args.inbreed_iter, args.inbreed_tole)
 		pd.DataFrame(F).to_csv(str(args.o) + ".inbreed", sep="\t", header=False, index=False)
 		print "Saved inbreeding coefficients as " + str(args.o) + ".inbreed"
 
@@ -302,7 +296,7 @@ if args.inbreed == 1:
 	del F
 
 elif args.inbreed == 2:
-	print "\n" + "Estimating inbreeding coefficients using Simple estimator (EM)"
+	print "\nEstimating inbreeding coefficients using Simple estimator (EM)"
 
 	# Estimating inbreeding coefficients
 	if args.iter == 0:
@@ -311,7 +305,7 @@ elif args.inbreed == 2:
 		pd.DataFrame(F).to_csv(str(args.o) + ".inbreed", sep="\t", header=False, index=False)
 		print "Saved inbreeding coefficients as " + str(args.o) + ".inbreed"
 	else:
-		F = inbreedEM(likeMatrix, indf, 2, args.inbreed_iter, args.inbreed_tole)
+		F = inbreedEM(likeMatrix, Pi, 2, args.inbreed_iter, args.inbreed_tole)
 		pd.DataFrame(F).to_csv(str(args.o) + ".inbreed", sep="\t", header=False, index=False)
 		print "Saved inbreeding coefficients as " + str(args.o) + ".inbreed"
 
@@ -319,7 +313,7 @@ elif args.inbreed == 2:
 	del F
 
 elif args.inbreed == 3:
-	print "\n" + "Estimating inbreeding coefficients using kinship estimator (PC-Relate)"
+	print "\nEstimating inbreeding coefficients using kinship estimator (PC-Relate)"
 
 	# Estimating inbreeding coefficients by previously estimated kinship matrix
 	F = 2*phi.diagonal() - 1
@@ -332,10 +326,10 @@ elif args.inbreed == 3:
 
 ##### Per-site inbreeding coefficients #####
 if args.inbreedSites:
-	print "\n" + "Estimating per-site inbreeding coefficients using simple estimator (EM) and performing LRT"
+	print "\nEstimating per-site inbreeding coefficients using simple estimator (EM) and performing LRT"
 
 	# Estimating per-site inbreeding coefficients
-	Fsites, lrt = inbreedSitesEM(likeMatrix, indf, args.inbreed_iter, args.inbreed_tole, args.threads)
+	Fsites, lrt = inbreedSitesEM(likeMatrix, Pi, args.inbreed_iter, args.inbreed_tole, args.threads)
 
 	# Save data frames
 	pd.DataFrame(Fsites).to_csv(str(args.o) + ".inbreed.sites.gz", header=False, index=False, compression="gzip")
@@ -351,10 +345,10 @@ if args.inbreedSites:
 
 ##### Genotype calling #####
 if args.geno is not None:
-	print "\n" + "Calling genotypes with a threshold of " + str(args.geno)
+	print "\nCalling genotypes with a threshold of " + str(args.geno)
 
 	# Call genotypes and save data frame
-	G = callGeno(likeMatrix, indf, None, args.geno, args.threads).T
+	G = callGeno(likeMatrix, Pi, None, args.geno, args.threads).T
 	np.save(str(args.o) + ".geno", G)
 	print "Saved called genotypes as " + str(args.o) + ".geno.npy (Binary)"
 
@@ -362,10 +356,10 @@ if args.geno is not None:
 	del G
 
 elif args.genoInbreed is not None:
-	print "\n" + "Calling genotypes with a threshold of " + str(args.genoInbreed)
+	print "\nCalling genotypes with a threshold of " + str(args.genoInbreed)
 
 	# Call genotypes and save data frame
-	G = callGeno(likeMatrix, indf, F, args.genoInbreed, args.threads).T
+	G = callGeno(likeMatrix, Pi, F, args.genoInbreed, args.threads).T
 	np.save(str(args.o) + ".genoInbreed", G)
 	print "Saved called genotypes as " + str(args.o) + ".genoInbreed.npy (Binary)"
 
@@ -378,7 +372,7 @@ if args.admix:
 	if args.admix_K is not None:
 		K = args.admix_K
 	else:
-		K = nEV + 1
+		K = e + 1
 
 	if args.admix_seed[0] is None:
 		from time import time
@@ -389,7 +383,7 @@ if args.admix:
 	# Automatic search for optimal alpha parameter
 	if args.admix_auto is not None:
 		print "\n" + ""
-		Q_admix, F_admix, a_best = alphaSearch(args.admix_auto, args.admix_depth, indf, K, likeMatrix, args.admix_iter, args.admix_tole, S_list[0], args.admix_batch, args.threads)
+		Q_admix, F_admix, a_best = alphaSearch(args.admix_auto, args.admix_depth, Pi, K, likeMatrix, args.admix_iter, args.admix_tole, S_list[0], args.admix_batch, args.threads)
 		pd.DataFrame(Q_admix).to_csv(str(args.o) + ".K" + str(K) + ".a" + str(a_best) + ".qopt", sep=" ", header=False, index=False)
 		print "Saved admixture proportions as " + str(args.o) + ".K" + str(K) + ".a" + str(a_best) + ".qopt"
 
@@ -402,8 +396,8 @@ if args.admix:
 	else:
 		for a in args.admix_alpha:
 			for s in S_list:
-				print "\n" + "Estimating admixture using NMF with K=" + str(K) + ", alpha=" + str(a) + ", batch=" + str(args.admix_batch) + " and seed=" + str(s)
-				Q_admix, F_admix, _ = admixNMF(indf, K, likeMatrix, a, args.admix_iter, args.admix_tole, s, args.admix_batch, args.threads)
+				print "\nEstimating admixture using NMF with K=" + str(K) + ", alpha=" + str(a) + ", batch=" + str(args.admix_batch) + " and seed=" + str(s)
+				Q_admix, F_admix, _ = admixNMF(Pi, K, likeMatrix, a, args.admix_iter, args.admix_tole, s, args.admix_batch, args.threads)
 
 				# Save data frame
 				if args.admix_seed[0] is None:
@@ -434,27 +428,40 @@ if args.maf_save:
 
 # Save individual allele frequencies
 if args.indf_save:
-	np.save(str(args.o) + ".indf", indf.astype(float, copy=False))
+	np.save(str(args.o) + ".indf", Pi.astype(float, copy=False))
 	print "Saved individual allele frequencies as " + str(args.o) + ".indf.npy (Binary)"
 
 # Save updated marker IDs
 if args.sites_save:
-	if args.plink is None:
-		pos = pd.read_csv(str(args.beagle), sep="\t", engine="c", header=None, skiprows=1, usecols=[0], compression="gzip")
-		if args.minMaf > 0.0:
-			pos = pos.ix[mask]
-			del mask
-		if args.HWE_filter != None:
-			pos = pos.ix[boolVec]
-			del boolVec
-		pos.to_csv(str(args.o) + ".sites", header=False, index=False)
-	else:
-		if args.minMaf > 0.0:
+	if args.minMaf > 0.0:
+		if args.HWE_filter is not None:
+			pos = pos[mask]
+			pos = pos[boolVec]
+			del mask, boolVec
+		else:
 			pos = pos[mask]
 			del mask
-		if args.HWE_filter != None:
-			pos = pos[boolVec]
-			del boolVec
-		pd.DataFrame(pos).to_csv(str(args.o) + ".sites", header=False, index=False)
-
+	elif args.HWE_filter is not None:
+		pos = pos[boolVec]
+		del boolVec
+	pd.DataFrame(pos).to_csv(str(args.o) + ".sites", header=False, index=False)
 	print "Saved site IDs as " + str(args.o) + ".sites"
+
+# Save posterior genotype probabilities
+if args.post_save:
+	print "\nSaving posterior genotype probabilities in Beagle format"
+	from helpFunctions import writeReadBeagle
+	
+	if args.iter == 0:
+		from helpFunctions import convertLikePostNoIndF
+		print "Note: Using population allele frequencies as prior!"
+		convertLikePostNoIndF(likeMatrix, f, args.threads)
+	else:
+		from helpFunctions import convertLikePost
+		convertLikePost(likeMatrix, Pi, args.threads)
+	
+	if args.plink is None:
+		writeReadBeagle(args.o + ".post.beagle", likeMatrix, pos, alleleMatrix)
+	else:
+		writeReadBeagle(args.o + ".post.beagle", likeMatrix, pos, None, indList)
+	print "Saved posterior genotype probabilities as " + str(args.o) + ".post.beagle"

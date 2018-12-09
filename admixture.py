@@ -156,14 +156,14 @@ def alphaSearch(aEnd, depth, indF, K, likeMatrix, iter, tole, seed, batch, t):
 	argL = 0
 	aBest = aMin
 	
-	print "\n" + "NMF: K=" + str(K) + ", alpha=" + str(aMid) + ", batch=" + str(batch) + " and seed=" + str(seed)
+	print "\nNMF: K=" + str(K) + ", alpha=" + str(aMid) + ", batch=" + str(batch) + " and seed=" + str(seed)
 	Q_test, F_test, L_test = admixNMF(indF, K, likeMatrix, aMid, iter, tole, seed, batch, t)
 	if L_test > L_best:
 		Q_best, F_best, L_best = np.copy(Q_test), np.copy(F_test), L_test
 		argL = 1
 		aBest = aMid
 	
-	print "\n" + "NMF: K=" + str(K) + ", alpha=" + str(aMax) + ", batch=" + str(batch) + " and seed=" + str(seed)
+	print "\nNMF: K=" + str(K) + ", alpha=" + str(aMax) + ", batch=" + str(batch) + " and seed=" + str(seed)
 	Q_test, F_test, L_test = admixNMF(indF, K, likeMatrix, aMax, iter, tole, seed, batch, t)
 	if L_test > L_best:
 		Q_best, F_best, L_best = np.copy(Q_test), np.copy(F_test), L_test
@@ -179,7 +179,7 @@ def alphaSearch(aEnd, depth, indF, K, likeMatrix, iter, tole, seed, batch, t):
 		aMax = aMid + aStep
 
 	for d in range(2, depth+1):
-		print "\n" + "Depth=" + str(d) + ", best alpha=" + str(aBest)
+		print "\nDepth=" + str(d) + ", best alpha=" + str(aBest)
 		if aMin == 0:
 			print "\n" + "NMF: K=" + str(K) + ", alpha=" + str(aMid) + ", batch=" + str(batch) + " and seed=" + str(seed)
 			Q_test, F_test, L_test = admixNMF(indF, K, likeMatrix, aMid, iter, tole, seed, batch, t)
@@ -189,7 +189,7 @@ def alphaSearch(aEnd, depth, indF, K, likeMatrix, iter, tole, seed, batch, t):
 				aBest = aMid
 
 		else:
-			print "\n" + "NMF: K=" + str(K) + ", alpha=" + str(aMin) + ", batch=" + str(batch) + " and seed=" + str(seed)
+			print "\nNMF: K=" + str(K) + ", alpha=" + str(aMin) + ", batch=" + str(batch) + " and seed=" + str(seed)
 			Q_test, F_test, L_test = admixNMF(indF, K, likeMatrix, aMin, iter, tole, seed, batch, t)
 			if L_test > L_best:
 				Q_best, F_best, L_best = np.copy(Q_test), np.copy(F_test), L_test
@@ -197,7 +197,7 @@ def alphaSearch(aEnd, depth, indF, K, likeMatrix, iter, tole, seed, batch, t):
 				aBest = aMin
 
 			else:
-				print "\n" + "NMF: K=" + str(K) + ", alpha=" + str(aMax) + ", batch=" + str(batch) + " and seed=" + str(seed)
+				print "\nNMF: K=" + str(K) + ", alpha=" + str(aMax) + ", batch=" + str(batch) + " and seed=" + str(seed)
 				Q_test, F_test, L_test = admixNMF(indF, K, likeMatrix, aMax, iter, tole, seed, batch, t)
 				if L_test > L_best:
 					Q_best, F_best, L_best = np.copy(Q_test), np.copy(F_test), L_test

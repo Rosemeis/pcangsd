@@ -13,15 +13,15 @@ from numba import jit
 ##### Functions #####
 # Genotype calling without inbreeding
 @jit("void(f4[:, :], f4[:, :], f8, i8, i8, i1[:, :])", nopython=True, nogil=True, cache=True)
-def gProbGeno(likeMatrix, indF, delta, S, N, G):
-	m, n = indF.shape # Dimensions
+def gProbGeno(likeMatrix, Pi, delta, S, N, G):
+	m, n = Pi.shape # Dimensions
 	
 	for ind in xrange(S, min(S+N, m)):
 		# Estimate posterior probabilities
 		for s in xrange(n):
-			p0 = likeMatrix[3*ind, s]*(1 - indF[ind, s])*(1 - indF[ind, s])
-			p1 = likeMatrix[3*ind+1, s]*2*indF[ind, s]*(1 - indF[ind, s])
-			p2 = likeMatrix[3*ind+2, s]*indF[ind, s]*indF[ind, s]
+			p0 = likeMatrix[3*ind, s]*(1 - Pi[ind, s])*(1 - Pi[ind, s])
+			p1 = likeMatrix[3*ind+1, s]*2*Pi[ind, s]*(1 - Pi[ind, s])
+			p2 = likeMatrix[3*ind+2, s]*Pi[ind, s]*Pi[ind, s]
 			pSum = p0 + p1 + p2
 
 			if (p0 == p1) & (p0 == p2): # If all equal
@@ -49,15 +49,15 @@ def gProbGeno(likeMatrix, indF, delta, S, N, G):
 
 # Genotype calling with inbreeding
 @jit("void(f4[:, :], f4[:, :], f4[:], f8, i8, i8, i1[:, :])", nopython=True, nogil=True, cache=True)
-def gProbGenoInbreeding(likeMatrix, indF, F, delta, S, N, G):
-	m, n = indF.shape # Dimensions
+def gProbGenoInbreeding(likeMatrix, Pi, F, delta, S, N, G):
+	m, n = Pi.shape # Dimensions
 	
 	for ind in xrange(S, min(S+N, m)):
 		# Estimate posterior probabilities
 		for s in xrange(n):
-			p0 = likeMatrix[3*ind, s]*((1 - indF[ind, s])*(1 - indF[ind, s]) + indF[ind, s]*(1 - indF[ind, s])*F[ind])
-			p1 = likeMatrix[3*ind+1, s]*(2*indF[ind, s]*(1 - indF[ind, s])*(1 - F[ind]))
-			p2 = likeMatrix[3*ind+2, s]*(indF[ind, s]*indF[ind, s] + indF[ind, S]*(1 - indF[ind, S])*F[ind])
+			p0 = likeMatrix[3*ind, s]*((1 - Pi[ind, s])*(1 - Pi[ind, s]) + Pi[ind, s]*(1 - Pi[ind, s])*F[ind])
+			p1 = likeMatrix[3*ind+1, s]*(2*Pi[ind, s]*(1 - Pi[ind, s])*(1 - F[ind]))
+			p2 = likeMatrix[3*ind+2, s]*(Pi[ind, s]*Pi[ind, s] + Pi[ind, S]*(1 - Pi[ind, S])*F[ind])
 			pSum = p0 + p1 + p2
 
 			if (p0 == p1) & (p0 == p2): # If all equal
@@ -84,8 +84,8 @@ def gProbGenoInbreeding(likeMatrix, indF, F, delta, S, N, G):
 					G[ind, s] = -9
 
 ##### Genotype calling #####
-def callGeno(likeMatrix, indF, F=None, delta=0.0, threads=1):
-	m, n = indF.shape # Dimensions
+def callGeno(likeMatrix, Pi, F=None, delta=0.0, threads=1):
+	m, n = Pi.shape # Dimensions
 	chunk_N = int(np.ceil(float(m)/threads))
 	chunks = [i * chunk_N for i in xrange(threads)]
 
@@ -95,14 +95,14 @@ def callGeno(likeMatrix, indF, F=None, delta=0.0, threads=1):
 	# Call genotypes with highest posterior probabilities
 	if type(F) != type(None):
 		# Multithreading
-		threads = [threading.Thread(target=gProbGenoInbreeding, args=(likeMatrix, indF, F, delta, chunk, chunk_N, G)) for chunk in chunks]
+		threads = [threading.Thread(target=gProbGenoInbreeding, args=(likeMatrix, Pi, F, delta, chunk, chunk_N, G)) for chunk in chunks]
 		for thread in threads:
 			thread.start()
 		for thread in threads:
 			thread.join()
 	else:
 		# Multithreading
-		threads = [threading.Thread(target=gProbGeno, args=(likeMatrix, indF, delta, chunk, chunk_N, G)) for chunk in chunks]
+		threads = [threading.Thread(target=gProbGeno, args=(likeMatrix, Pi, delta, chunk, chunk_N, G)) for chunk in chunks]
 		for thread in threads:
 			thread.start()
 		for thread in threads:

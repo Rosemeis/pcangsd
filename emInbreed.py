@@ -18,8 +18,8 @@ from numba import jit
 
 # Inner update - model 1
 @jit("void(f4[:, :], f4[:, :], i8, i8, f8[:])", nopython=True, nogil=True, cache=True)
-def inbreedEM_inner1(likeMatrix, indF, S, N, F):
-	m, n = indF.shape # Dimensions
+def inbreedEM_inner1(likeMatrix, Pi, S, N, F):
+	m, n = Pi.shape # Dimensions
 
 	for ind in xrange(S, min(S+N, m)):
 		temp = 0
@@ -27,15 +27,15 @@ def inbreedEM_inner1(likeMatrix, indF, S, N, F):
 		# Estimate posterior probabilities (Z)
 		for s in xrange(n):
 			# Z = 0
-			prob0 = likeMatrix[3*ind, s]*(1 - indF[ind, s])*(1 - indF[ind, s])
-			prob1 = likeMatrix[3*ind+1, s]*2*indF[ind, s]*(1 - indF[ind, s])
-			prob2 = likeMatrix[3*ind+2, s]*indF[ind, s]*indF[ind, s]
+			prob0 = likeMatrix[3*ind, s]*(1 - Pi[ind, s])*(1 - Pi[ind, s])
+			prob1 = likeMatrix[3*ind+1, s]*2*Pi[ind, s]*(1 - Pi[ind, s])
+			prob2 = likeMatrix[3*ind+2, s]*Pi[ind, s]*Pi[ind, s]
 			Z0 = (prob0 + prob1 + prob2)*(1 - F[ind])
 
 			# Z = 1
-			prob0 = likeMatrix[3*ind, s]*(1 - indF[ind, s])
+			prob0 = likeMatrix[3*ind, s]*(1 - Pi[ind, s])
 			prob1 = 0
-			prob2 = likeMatrix[3*ind+2, s]*indF[ind, s]
+			prob2 = likeMatrix[3*ind+2, s]*Pi[ind, s]
 			Z1 = (prob0 + prob1 + prob2)*F[ind]
 
 			# Update the inbreeding coefficient
@@ -44,8 +44,8 @@ def inbreedEM_inner1(likeMatrix, indF, S, N, F):
 
 # Inner update - model 2
 @jit("void(f4[:, :], f4[:, :], i8, i8, f8[:])", nopython=True, nogil=True, cache=True)
-def inbreedEM_inner2(likeMatrix, indF, S, N, F):
-	m, n = indF.shape # Dimensions
+def inbreedEM_inner2(likeMatrix, Pi, S, N, F):
+	m, n = Pi.shape # Dimensions
 
 	for ind in xrange(S, min(S+N, m)):
 		expH = 0
@@ -55,10 +55,10 @@ def inbreedEM_inner2(likeMatrix, indF, S, N, F):
 
 		for s in xrange(n):
 			# Normalize priors
-			Fadj = (1 - indF[ind, s])*indF[ind, s]*F[ind]
-			prior0 = max(1e-4, (1 - indF[ind, s])*(1 - indF[ind, s]) + Fadj)
-			prior1 = max(1e-4, 2*indF[ind, s]*(1 - indF[ind, s]) - 2*Fadj)
-			prior2 = max(1e-4, indF[ind, s]*indF[ind, s] + Fadj)
+			Fadj = (1 - Pi[ind, s])*Pi[ind, s]*F[ind]
+			prior0 = max(1e-4, (1 - Pi[ind, s])*(1 - Pi[ind, s]) + Fadj)
+			prior1 = max(1e-4, 2*Pi[ind, s]*(1 - Pi[ind, s]) - 2*Fadj)
+			prior2 = max(1e-4, Pi[ind, s]*Pi[ind, s] + Fadj)
 			priorSum = prior0 + prior1 + prior2
 
 			# Readjust genotype distribution
@@ -77,7 +77,7 @@ def inbreedEM_inner2(likeMatrix, indF, S, N, F):
 			prob2 += temp2/tempSum
 
 			# Counts of heterozygotes (expected)
-			expH += 2*indF[ind, s]*(1 - indF[ind, s])
+			expH += 2*Pi[ind, s]*(1 - Pi[ind, s])
 		
 		# ANGSD procedure
 		prob0 /= n
@@ -95,7 +95,7 @@ def inbreedEM_inner2(likeMatrix, indF, S, N, F):
 
 # Population allele frequencies version (-iter 0) - Inner update - model 1
 @jit("void(f4[:, :], f8[:], i8, i8, f8[:])", nopython=True, nogil=True, cache=True)
-def inbreedEM_inner1_noIndF(likeMatrix, f, S, N, F):
+def inbreedEM_inner1_noPi(likeMatrix, f, S, N, F):
 	m, n = likeMatrix.shape # Dimension of likelihood matrix
 	m /= 3 # Number of individuals
 	probZ = np.empty((2, n))
@@ -124,7 +124,7 @@ def inbreedEM_inner1_noIndF(likeMatrix, f, S, N, F):
 
 # Population allele frequencies version (-iter 0) - Inner update - model 2
 @jit("void(f4[:, :], f8[:], i8, i8, f8[:])", nopython=True, nogil=True, cache=True)
-def inbreedEM_inner2_noIndF(likeMatrix, f, S, N, F):
+def inbreedEM_inner2_noPi(likeMatrix, f, S, N, F):
 	m, n = likeMatrix.shape # Dimension of likelihood matrix
 	m /= 3 # Number of individuals
 	expH = np.sum(2*f*(1 - f)) # Expected number of heterozygotes
@@ -173,8 +173,8 @@ def inbreedEM_inner2_noIndF(likeMatrix, f, S, N, F):
 
 
 # EM algorithm for estimation of inbreeding coefficients
-def inbreedEM(likeMatrix, indF, model, EM=200, EM_tole=1e-4, t=1):
-	m, n = indF.shape # Dimensions
+def inbreedEM(likeMatrix, Pi, model, EM=200, EM_tole=1e-4, t=1):
+	m, n = Pi.shape # Dimensions
 	F = np.ones(m)*0.25 # Initialization of inbreeding coefficients
 	F_prev = np.copy(F)
 
@@ -185,16 +185,16 @@ def inbreedEM(likeMatrix, indF, model, EM=200, EM_tole=1e-4, t=1):
 	# Model 1 - (Hall et al.)
 	if model == 1:
 		for iteration in xrange(1, EM + 1):
-			if indF.ndim == 2:
+			if Pi.ndim == 2:
 				# Multithreading - Update F
-				threads = [threading.Thread(target=inbreedEM_inner1, args=(likeMatrix, indF, chunk, chunk_N, F)) for chunk in chunks]
+				threads = [threading.Thread(target=inbreedEM_inner1, args=(likeMatrix, Pi, chunk, chunk_N, F)) for chunk in chunks]
 				for thread in threads:
 					thread.start()
 				for thread in threads:
 					thread.join()
 			else:
 				# Population allele frequencies version (-iter 0) - Multithreading - Update F
-				threads = [threading.Thread(target=inbreedEM_inner1_noIndF, args=(likeMatrix, indF, chunk, chunk_N, F)) for chunk in chunks]
+				threads = [threading.Thread(target=inbreedEM_inner1_noPi, args=(likeMatrix, Pi, chunk, chunk_N, F)) for chunk in chunks]
 				for thread in threads:
 					thread.start()
 				for thread in threads:
@@ -211,16 +211,16 @@ def inbreedEM(likeMatrix, indF, model, EM=200, EM_tole=1e-4, t=1):
 	# Model 2 - (Vieira et al.)
 	if model == 2:
 		for iteration in xrange(1, EM + 1):
-			if indF.ndim == 2:
+			if Pi.ndim == 2:
 				# Multithreading - Update F
-				threads = [threading.Thread(target=inbreedEM_inner2, args=(likeMatrix, indF, chunk, chunk_N, F)) for chunk in chunks]
+				threads = [threading.Thread(target=inbreedEM_inner2, args=(likeMatrix, Pi, chunk, chunk_N, F)) for chunk in chunks]
 				for thread in threads:
 					thread.start()
 				for thread in threads:
 					thread.join()
 			else:
 				# Population allele frequencies version (-iter 0) - Multithreading - Update F
-				threads = [threading.Thread(target=inbreedEM_inner2_noIndF, args=(likeMatrix, indF, chunk, chunk_N, F)) for chunk in chunks]
+				threads = [threading.Thread(target=inbreedEM_inner2_noPi, args=(likeMatrix, Pi, chunk, chunk_N, F)) for chunk in chunks]
 				for thread in threads:
 					thread.start()
 				for thread in threads:

@@ -95,7 +95,7 @@ def relatedPCAngsd(likeMatrix, e, f, K, r_tole, M, M_tole, t=1):
 	chunks_R = [i * chunk_N_R for i in xrange(t)]
 
 	# PCAngsd unrelated
-	print "\n" + "Estimating individual allele frequencies for " + str(unrelatedM) + " unrelated individuals."
+	print "\nEstimating individual allele frequencies for " + str(unrelatedM) + " unrelated individuals."
 
 	# Estimate individual allele frequencies for unrelated individuals
 	expG_UR = np.empty((unrelatedM, n), dtype=np.float32)
@@ -140,7 +140,7 @@ def relatedPCAngsd(likeMatrix, e, f, K, r_tole, M, M_tole, t=1):
 		prevW = np.copy(W)
 
 	# Estimate individual allele frequencies for related individuals
-	print "\n" + "Estimating individual allele frequencies for " + str(relatedM) + " related individuals."
+	print "\nEstimating individual allele frequencies for " + str(relatedM) + " related individuals."
 	expG_R = np.empty((relatedM, n), dtype=np.float32)
 
 	# Multithreading
@@ -192,7 +192,7 @@ def relatedPCAngsd(likeMatrix, e, f, K, r_tole, M, M_tole, t=1):
 		thread.join()
 
 	# Covariance matrix
-	print "\n" + "Estimating covariance matrix using unrelated individuals."
+	print "\nEstimating covariance matrix using unrelated individuals."
 	diagC = np.empty(unrelatedM)
 
 	# Multithreading

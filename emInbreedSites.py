@@ -18,8 +18,8 @@ from math import log
 
 # Inner update
 @jit("void(f4[:, :], f4[:, :], i8, i8, f8[:])", nopython=True, nogil=True, cache=True)
-def inbreedSitesEM_inner(likeMatrix, indF, S, N, F):
-	m, n = indF.shape # Dimensions
+def inbreedSitesEM_inner(likeMatrix, Pi, S, N, F):
+	m, n = Pi.shape # Dimensions
 
 	for s in xrange(S, min(S+N, n)):
 		expH = 0
@@ -28,10 +28,10 @@ def inbreedSitesEM_inner(likeMatrix, indF, S, N, F):
 		prob2 = 0
 
 		for ind in xrange(m):
-			Fadj = (1 - indF[ind, s])*indF[ind, s]*F[s]
-			prior0 = max(1e-4, (1 - indF[ind, s])*(1 - indF[ind, s]) + Fadj)
-			prior1 = max(1e-4, 2*indF[ind, s]*(1 - indF[ind, s]) - 2*Fadj)
-			prior2 = max(1e-4, indF[ind, s]*indF[ind, s] + Fadj)
+			Fadj = (1 - Pi[ind, s])*Pi[ind, s]*F[s]
+			prior0 = max(1e-4, (1 - Pi[ind, s])*(1 - Pi[ind, s]) + Fadj)
+			prior1 = max(1e-4, 2*Pi[ind, s]*(1 - Pi[ind, s]) - 2*Fadj)
+			prior2 = max(1e-4, Pi[ind, s]*Pi[ind, s] + Fadj)
 			priorSum = prior0 + prior1 + prior2
 
 			# Readjust genotype distribution
@@ -50,7 +50,7 @@ def inbreedSitesEM_inner(likeMatrix, indF, S, N, F):
 			prob2 += temp2/tempSum
 
 			# Counts of heterozygotes (expected)
-			expH += 2*indF[ind, s]*(1 - indF[ind, s])
+			expH += 2*Pi[ind, s]*(1 - Pi[ind, s])
 
 		# ANGSD procedure
 		prob0 /= m
@@ -68,17 +68,17 @@ def inbreedSitesEM_inner(likeMatrix, indF, S, N, F):
 
 # Loglikelihood estimates
 @jit("void(f4[:, :], f4[:, :], f8[:], i8, i8, f8[:], f8[:])", nopython=True, nogil=True, cache=True)
-def loglike(likeMatrix, indF, F, S, N, logAlt, logNull):
-	m, n = indF.shape # Dimensions
+def loglike(likeMatrix, Pi, F, S, N, logAlt, logNull):
+	m, n = Pi.shape # Dimensions
 
 	for s in xrange(S, min(S+N, n)):
 		for ind in xrange(m):
 			### Alternative model
 			# Priors
-			Fadj = (1 - indF[ind, s])*indF[ind, s]*F[s]
-			prior0 = max(1e-4, (1 - indF[ind, s])*(1 - indF[ind, s]) + Fadj)
-			prior1 = max(1e-4, 2*indF[ind, s]*(1 - indF[ind, s]) - 2*Fadj)
-			prior2 = max(1e-4, indF[ind, s]*indF[ind, s] + Fadj)
+			Fadj = (1 - Pi[ind, s])*Pi[ind, s]*F[s]
+			prior0 = max(1e-4, (1 - Pi[ind, s])*(1 - Pi[ind, s]) + Fadj)
+			prior1 = max(1e-4, 2*Pi[ind, s]*(1 - Pi[ind, s]) - 2*Fadj)
+			prior2 = max(1e-4, Pi[ind, s]*Pi[ind, s] + Fadj)
 			priorSum = prior0 + prior1 + prior2
 
 			# Readjust genotype distribution
@@ -93,14 +93,14 @@ def loglike(likeMatrix, indF, F, S, N, logAlt, logNull):
 			logAlt[s] += log(like0 + like1 + like2)
 
 			### Null model
-			like0 = likeMatrix[3*ind, s]*(1 - indF[ind, s])*(1 - indF[ind, s])
-			like1 = likeMatrix[3*ind + 1, s]*2*indF[ind, s]*(1 - indF[ind, s])
-			like2 = likeMatrix[3*ind + 2, s]*indF[ind, s]*indF[ind, s]
+			like0 = likeMatrix[3*ind, s]*(1 - Pi[ind, s])*(1 - Pi[ind, s])
+			like1 = likeMatrix[3*ind + 1, s]*2*Pi[ind, s]*(1 - Pi[ind, s])
+			like2 = likeMatrix[3*ind + 2, s]*Pi[ind, s]*Pi[ind, s]
 			logNull[s] += log(like0 + like1 + like2)
 
 # EM algorithm for estimation of inbreeding coefficients
-def inbreedSitesEM(likeMatrix, indF, EM=200, EM_tole=1e-4, t=1):
-	m, n = indF.shape # Dimensions
+def inbreedSitesEM(likeMatrix, Pi, EM=200, EM_tole=1e-4, t=1):
+	m, n = Pi.shape # Dimensions
 	F = np.zeros(n) # Initialization of inbreeding coefficients
 	F_prev = np.copy(F)
 
@@ -111,7 +111,7 @@ def inbreedSitesEM(likeMatrix, indF, EM=200, EM_tole=1e-4, t=1):
 	# EM algorithm
 	for iteration in xrange(1, EM + 1):
 		# Multithreading - Update F
-		threads = [threading.Thread(target=inbreedSitesEM_inner, args=(likeMatrix, indF, chunk, chunk_N, F)) for chunk in chunks]
+		threads = [threading.Thread(target=inbreedSitesEM_inner, args=(likeMatrix, Pi, chunk, chunk_N, F)) for chunk in chunks]
 		for thread in threads:
 			thread.start()
 		for thread in threads:
@@ -130,7 +130,7 @@ def inbreedSitesEM(likeMatrix, indF, EM=200, EM_tole=1e-4, t=1):
 	logNull = np.zeros(n)
 
 	# Multithreading - Estimate log-likelihoods of two models
-	threads = [threading.Thread(target=loglike, args=(likeMatrix, indF, F, chunk, chunk_N, logAlt, logNull)) for chunk in chunks]
+	threads = [threading.Thread(target=loglike, args=(likeMatrix, Pi, F, chunk, chunk_N, logAlt, logNull)) for chunk in chunks]
 	for thread in threads:
 		thread.start()
 	for thread in threads:
