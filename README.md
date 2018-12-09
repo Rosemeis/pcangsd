@@ -1,6 +1,6 @@
 # PCAngsd
 
-**Version 0.96** 
+**Version 0.97** 
 *PCAngsd now supports PLINK files!*
 
 Framework for analyzing low depth next-generation sequencing (NGS) data in heterogeneous populations using principal component analysis (PCA). Population structure is inferred to detect the number of significant principal components which is used to estimate individual allele frequencies using genotype dosages in a SVD model. The estimated individual allele frequencies are then used in an probabilistic framework to update the genotype dosages such that an updated set of individual allele frequencies can be estimated iteratively based on inferred population structure. A covariance matrix can be estimated using the updated prior information of the estimated individual allele frequencies.
@@ -12,7 +12,7 @@ The estimated individual allele frequencies and principal components can be used
 * Admixture
 * Inbreeding coefficients (both per-individual and per-site)
 * HWE test
-* Genome selection scan
+* PC-based genome-wide selection scan
 * Kinship matrix
 
 The entire framework is written Python 2.7 based on Numpy data structures to take use of the Numba library for improving performances in bottlenecks. Multithreading has been added to take advantage of multiple cores and is highly recommended.
