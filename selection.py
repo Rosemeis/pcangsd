@@ -12,47 +12,46 @@ import numpy as np
 import threading
 from math import sqrt
 from numba import jit
+from scipy.sparse.linalg import eigsh
 
 # Normalize the posterior expectations of the genotypes
 @jit("void(f4[:, :], f8[:], i8, i8, f8[:, :])", nopython=True, nogil=True, cache=True)
-def normalizeGeno(expG, f, S, N, X):
-	m, n = expG.shape
+def normalizeGeno(E, f, S, N, X):
+	m, n = E.shape
 	for ind in xrange(S, min(S+N, m)):
 		for s in xrange(n):
-			X[ind, s] = (expG[ind, s] - 2*f[s])/sqrt(2*f[s]*(1 - f[s]))
+			X[ind, s] = (E[ind, s] - 2*f[s])/sqrt(2*f[s]*(1 - f[s]))
 
 # Selection scan
-def selectionScan(expG, f, C, nEV, V=None, Sigma=None, model=1, threads=1):
+def selectionScan(E, f, C, e, model=1, t=1):
+	m, n = E.shape # Dimensions
+
 	# Perform eigendecomposition on covariance matrix
-	m, n = expG.shape
+	Sigma, V = eigsh(C, k=e) # Eigendecomposition (Symmetric) - ARPACK
+	Sigma = Sigma[::-1] # Sorted eigenvalues
+	V = V[:, ::-1] # Sorted eigenvectors
 
-	# Check for relatedness correction
-	if V is None:
-		eigVals, eigVecs = np.linalg.eigh(C) # Eigendecomposition (Symmetric)
-		sort = np.argsort(eigVals)[::-1] # Sorting vector
-		Sigma = eigVals[sort[:nEV]] # Sorted eigenvalues
-		V = eigVecs[:, sort[:nEV]] # Sorted eigenvectors
-
-	chunk_N = int(np.ceil(float(m)/threads))
-	chunks = [i * chunk_N for i in xrange(threads)]
+	# Multithreading parameters
+	chunk_N = int(np.ceil(float(m)/t))
+	chunks = [i * chunk_N for i in xrange(t)]
 
 	if model==1: # FastPCA
 		X = np.empty((m, n))
 
 		# Multithreading
-		threads = [threading.Thread(target=normalizeGeno, args=(expG, f, chunk, chunk_N, X)) for chunk in chunks]
+		threads = [threading.Thread(target=normalizeGeno, args=(E, f, chunk, chunk_N, X)) for chunk in chunks]
 		for thread in threads:
 			thread.start()
 		for thread in threads:
 			thread.join()
 
 		# Test statistic container
-		test = np.zeros((nEV, n))
+		test = np.zeros((e, n))
 
 		# Compute p-values for each PC in each site
-		for eigVec in xrange(nEV):
+		for ev in xrange(e):
 			# Weighted SNPs are chi-square distributed with df = 1
-			test[eigVec] = (1.0/Sigma[eigVec])*(np.dot(X.T, V[:, eigVec])**2)
+			test[ev] = (np.dot(X.T, V[:, ev])**2)/Sigma[ev]
 
 
 	elif model==2: # PCAdapt
@@ -60,8 +59,8 @@ def selectionScan(expG, f, C, nEV, V=None, Sigma=None, model=1, threads=1):
 
 		# Linear regressions
 		hatX = np.dot(np.linalg.inv(np.dot(V.T, V)), V.T)
-		B = np.dot(hatX, expG)
-		res = expG - np.dot(V, np.dot(hatX, expG))
+		B = np.dot(hatX, E)
+		res = E - np.dot(V, np.dot(hatX, E))
 
 		# Z-scores estimation
 		resStd = np.std(res, axis=0, ddof=1) # Standard deviations of residuals

@@ -59,7 +59,7 @@ def updateQ(Q, A, QB, alpha):
 			Q[i, k] = min(Q[i, k], 1-(1e-4))
 
 # Estimate admixture using non-negative matrix factorization
-def admixNMF(X, K, likeMatrix, alpha=0, iter=100, tole=5e-5, seed=0, batch=5, threads=1):
+def admixNMF(X, K, likeMatrix, alpha=0, iter=100, tole=5e-5, seed=0, batch=5, t=1):
 	m, n = X.shape # Dimensions of individual allele frequencies
 
 	# Shuffle individual allele frequencies
@@ -74,14 +74,14 @@ def admixNMF(X, K, likeMatrix, alpha=0, iter=100, tole=5e-5, seed=0, batch=5, th
 	F = np.dot(np.dot(np.linalg.inv(np.dot(Q.T, Q)), Q.T), X).T
 
 	# Multithreading parameters
-	chunk_N = int(np.ceil(float(m)/threads))
-	chunks = [i * chunk_N for i in xrange(threads)]
+	chunk_N = int(np.ceil(float(m)/t))
+	chunks = [i * chunk_N for i in xrange(t)]
 
 	# Batch preparation
 	batch_N = int(np.ceil(float(n)/batch))
 	bIndex = np.arange(0, n, batch_N)
 
-	# SG-MU
+	# CSG-MU - Cyclic mini-batch stochastic gradient descent
 	for iteration in xrange(1, iter + 1):
 		for b in bIndex:
 			bEnd = min(b + batch_N, n)
@@ -179,7 +179,7 @@ def alphaSearch(aEnd, depth, indF, K, likeMatrix, iter, tole, seed, batch, t):
 		aMax = aMid + aStep
 
 	for d in range(2, depth+1):
-		print "\nDepth=" + str(d) + ", best alpha=" + str(aBest)
+		print "\nDepth=" + str(d) + ", best alpha=" + str(aBest) + ", log-like=" + str(L_best)
 		if aMin == 0:
 			print "\n" + "NMF: K=" + str(K) + ", alpha=" + str(aMid) + ", batch=" + str(batch) + " and seed=" + str(seed)
 			Q_test, F_test, L_test = admixNMF(indF, K, likeMatrix, aMid, iter, tole, seed, batch, t)

@@ -36,11 +36,11 @@ def diagKinship(likeMatrix, Pi, S, N, diagK):
 
 # Prepare numerator matrix
 @jit("void(f4[:, :], f4[:, :], i8, i8, f8[:, :])", nopython=True, nogil=True, cache=True)
-def numeratorKin(expG, Pi, S, N, X):
-	m, n = expG.shape
+def numeratorKin(E, Pi, S, N, X):
+	m, n = E.shape
 	for ind in xrange(S, min(S+N, m)):
 		for s in xrange(n):
-			X[ind, s] = expG[ind, s] - 2*Pi[ind, s]
+			X[ind, s] = E[ind, s] - 2*Pi[ind, s]
 
 # Prepare denominator matrix
 @jit("void(f4[:, :], i8, i8, f8[:, :])", nopython=True, nogil=True, cache=True)
@@ -51,12 +51,12 @@ def denominatorKin(Pi, S, N, X):
 			X[ind, s] = sqrt(Pi[ind, s]*(1 - Pi[ind, s]))
 
 # Estimate full kinship matrix with biased diagonal
-def estimateKinship(expG, Pi, chunks, chunk_N):
-	m, n = expG.shape
+def estimateKinship(E, Pi, chunks, chunk_N):
+	m, n = E.shape
 	X = np.empty((m, n))
 
 	# Multithreading
-	threads = [threading.Thread(target=numeratorKin, args=(expG, Pi, chunk, chunk_N, X)) for chunk in chunks]
+	threads = [threading.Thread(target=numeratorKin, args=(E, Pi, chunk, chunk_N, X)) for chunk in chunks]
 	for thread in threads:
 		thread.start()
 	for thread in threads:
@@ -75,8 +75,8 @@ def estimateKinship(expG, Pi, chunks, chunk_N):
 	return num/dem
 
 
-def kinshipConomos(likeMatrix, Pi, expG, t=1):
-	m, n = expG.shape
+def kinshipConomos(likeMatrix, Pi, E, t=1):
+	m, n = E.shape
 	diagK = np.empty(m)
 	phi = np.zeros((m, m))
 
@@ -91,6 +91,6 @@ def kinshipConomos(likeMatrix, Pi, expG, t=1):
 	for thread in threads:
 		thread.join()
 
-	phi = estimateKinship(expG, Pi, chunks, chunk_N)
+	phi = estimateKinship(E, Pi, chunks, chunk_N)
 	np.fill_diagonal(phi, diagK) # Insert correct diagonal
 	return phi

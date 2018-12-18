@@ -161,14 +161,14 @@ def estimateF(E, f, e, F, chunks, chunk_N):
 
 
 ##### PCAngsd #####
-def PCAngsd(likeMatrix, EVs, M, f, M_tole, threads=1):
+def PCAngsd(likeMatrix, EVs, M, f, M_tole, t=1):
 	m, n = likeMatrix.shape # Dimension of likelihood matrix
 	m /= 3 # Number of individuals
 	e = EVs
 
 	# Multithreading parameters
-	chunk_N = int(np.ceil(float(m)/threads))
-	chunks = [i * chunk_N for i in xrange(threads)]
+	chunk_N = int(np.ceil(float(m)/t))
+	chunks = [i * chunk_N for i in xrange(t)]
 
 	# Initiate matrices
 	E = np.empty((m, n), dtype=np.float32)
@@ -190,11 +190,10 @@ def PCAngsd(likeMatrix, EVs, M, f, M_tole, threads=1):
 			return C, None, e, E
 
 		# Velicer's Minimum Average Partial (MAP) Test
-		eigVals, eigVecs = eigsh(C, k=min(m-1, 15)) # Eigendecomposition (Symmetric - Scipy library)
-		sort = np.argsort(eigVals)[::-1] # Sorting vector
-		eigVals = eigVals[sort] # Sorted eigenvalues
+		eigVals, eigVecs = eigsh(C, k=min(m-1, 15)) # Eigendecomposition (Symmetric) - ARPACK
+		eigVals = eigVals[::-1] # Sorted eigenvalues
 		eigVals[eigVals < 0] = 0
-		eigVecs = eigVecs[:, sort] # Sorted eigenvectors
+		eigVecs = eigVecs[:, ::-1] # Sorted eigenvectors
 		loadings = eigVecs*np.sqrt(eigVals)
 		mapTest = np.empty(min(m-1, 15))
 

@@ -42,14 +42,14 @@ def alleleEM_inner(likeMatrix, f, S, N, newF):
 		newF[s] /= m
 
 # EM algorithm for estimation of population allele frequencies
-def alleleEM(likeMatrix, EM=200, EM_tole=1e-4, threads=1):
+def alleleEM(likeMatrix, EM=200, EM_tole=1e-4, t=1):
 	m, n = likeMatrix.shape
 	m /= 3
 	f = np.ones(n)*0.25 # Uniform initialization
 
 	# Prepare for multithreading
-	chunk_N = int(np.ceil(float(n)/threads))
-	chunks = [i * chunk_N for i in xrange(threads)]
+	chunk_N = int(np.ceil(float(n)/t))
+	chunks = [i * chunk_N for i in xrange(t)]
 
 	for iteration in xrange(1, EM + 1): # EM iterations
 		f = updateF(likeMatrix, f, chunks, chunk_N) # Updated allele frequencies

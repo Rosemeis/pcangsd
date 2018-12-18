@@ -84,10 +84,10 @@ def gProbGenoInbreeding(likeMatrix, Pi, F, delta, S, N, G):
 					G[ind, s] = -9
 
 ##### Genotype calling #####
-def callGeno(likeMatrix, Pi, F=None, delta=0.0, threads=1):
+def callGeno(likeMatrix, Pi, F=None, delta=0.0, t=1):
 	m, n = Pi.shape # Dimensions
-	chunk_N = int(np.ceil(float(m)/threads))
-	chunks = [i * chunk_N for i in xrange(threads)]
+	chunk_N = int(np.ceil(float(m)/t))
+	chunks = [i * chunk_N for i in xrange(t)]
 
 	# Initiate genotype matrix
 	G = np.empty((m, n), dtype=np.int8)

@@ -98,8 +98,6 @@ def inbreedEM_inner2(likeMatrix, Pi, S, N, F):
 def inbreedEM_inner1_noPi(likeMatrix, f, S, N, F):
 	m, n = likeMatrix.shape # Dimension of likelihood matrix
 	m /= 3 # Number of individuals
-	probZ = np.empty((2, n))
-	probMatrix = np.empty((3, n))
 
 	for ind in xrange(S, min(S+N, m)):
 		temp = 0
@@ -174,7 +172,8 @@ def inbreedEM_inner2_noPi(likeMatrix, f, S, N, F):
 
 # EM algorithm for estimation of inbreeding coefficients
 def inbreedEM(likeMatrix, Pi, model, EM=200, EM_tole=1e-4, t=1):
-	m, n = Pi.shape # Dimensions
+	m, n = likeMatrix.shape # Dimension of likelihood matrix
+	m /= 3 # Number of individuals
 	F = np.ones(m)*0.25 # Initialization of inbreeding coefficients
 	F_prev = np.copy(F)
 
