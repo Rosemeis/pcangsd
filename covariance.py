@@ -49,9 +49,9 @@ def covFumagalli(likeMatrix, f, S, N, E, diagC):
 
 			# Update dosage and diagonal of GRM
 			E[ind, s] = (p1 + 2*p2)/pSum
-			temp = (0 - 2*f[s])*(0 - 2*f[s])*p0
-			temp += (1 - 2*f[s])*(1 - 2*f[s])*p1
-			temp += (2 - 2*f[s])*(2 - 2*f[s])*p2
+			temp = (0 - 2*f[s])*(0 - 2*f[s])*(p0/pSum)
+			temp += (1 - 2*f[s])*(1 - 2*f[s])*(p1/pSum)
+			temp += (2 - 2*f[s])*(2 - 2*f[s])*(p2/pSum)
 			diagC[ind] += temp/(2*f[s]*(1 - f[s]))
 		diagC[ind] /= n
 
@@ -88,9 +88,9 @@ def covPCAngsd(likeMatrix, Pi, f, S, N, E, diagC):
 
 			# Update dosage
 			E[ind, s] = (p1 + 2*p2)/pSum
-			temp = (0 - 2*f[s])*(0 - 2*f[s])*p0
-			temp += (1 - 2*f[s])*(1 - 2*f[s])*p1
-			temp += (2 - 2*f[s])*(2 - 2*f[s])*p2
+			temp = (0 - 2*f[s])*(0 - 2*f[s])*(p0/pSum)
+			temp += (1 - 2*f[s])*(1 - 2*f[s])*(p1/pSum)
+			temp += (2 - 2*f[s])*(2 - 2*f[s])*(p2/pSum)
 			diagC[ind] += temp/(2*f[s]*(1 - f[s]))
 		diagC[ind] /= n
 
@@ -253,7 +253,7 @@ def PCAngsd(likeMatrix, EVs, M, f, M_tole, t=1):
 			oldDiff = diff
 		else:
 			res = abs(diff - oldDiff)
-			if res < 5e-7:
+			if res < 1e-7:
 				print "Estimation of individual allele frequencies has converged due to small change in differences: " + str(res)
 				break
 			oldDiff = diff

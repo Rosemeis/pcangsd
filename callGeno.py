@@ -93,16 +93,16 @@ def callGeno(likeMatrix, Pi, F=None, delta=0.0, t=1):
 	G = np.empty((m, n), dtype=np.int8)
 
 	# Call genotypes with highest posterior probabilities
-	if type(F) != type(None):
+	if F is None:
 		# Multithreading
-		threads = [threading.Thread(target=gProbGenoInbreeding, args=(likeMatrix, Pi, F, delta, chunk, chunk_N, G)) for chunk in chunks]
+		threads = [threading.Thread(target=gProbGeno, args=(likeMatrix, Pi, delta, chunk, chunk_N, G)) for chunk in chunks]
 		for thread in threads:
 			thread.start()
 		for thread in threads:
 			thread.join()
 	else:
 		# Multithreading
-		threads = [threading.Thread(target=gProbGeno, args=(likeMatrix, Pi, delta, chunk, chunk_N, G)) for chunk in chunks]
+		threads = [threading.Thread(target=gProbGenoInbreeding, args=(likeMatrix, Pi, F, delta, chunk, chunk_N, G)) for chunk in chunks]
 		for thread in threads:
 			thread.start()
 		for thread in threads:

@@ -25,7 +25,7 @@ import admixture
 
 ##### Argparse #####
 parser = argparse.ArgumentParser(prog="PCAngsd")
-parser.add_argument("--version", action="version", version="%(prog)s 0.972")
+parser.add_argument("--version", action="version", version="%(prog)s 0.973")
 parser.add_argument("-beagle", metavar="FILE",
 	help="Input file of genotype likelihoods in Beagle format (.gz)")
 parser.add_argument("-indf", metavar="FILE",
@@ -112,7 +112,7 @@ parser.add_argument("-threads", metavar="INT", type=int, default=1,
 parser.add_argument("-o", metavar="OUTPUT", help="Prefix output file name", default="pcangsd")
 args = parser.parse_args()
 
-print "PCAngsd 0.972"
+print "PCAngsd 0.973"
 print "Using " + str(args.threads) + " thread(s)"
 
 # Setting up workflow parameters
