@@ -29,23 +29,13 @@ def gProbGeno(likeMatrix, Pi, delta, S, N, G):
 				continue
 
 			# Call posterior maximum
-			if p0 > p1:
-				if p0 > p2: # G = 0
-					if p0/pSum > delta:
-						G[ind, s] = 0
-					else:
-						G[ind, s] = -9
-				else: # G = 2
-					if p2/pSum > delta:
-						G[ind, s] = 2
-					else:
-						G[ind, s] = -9
+			pVec = np.array([p0, p1, p2])
+			g = np.argmax(pVec)
 
-			else: # G = 1
-				if p1/pSum > delta:
-					G[ind, s] = 1
-				else:
-					G[ind, s] = -9
+			if (pVec[g]/pSum) > delta:
+				G[ind, s] = g
+			else:
+				G[ind, s] = -9
 
 # Genotype calling with inbreeding
 @jit("void(f4[:, :], f4[:, :], f4[:], f8, i8, i8, i1[:, :])", nopython=True, nogil=True, cache=True)
@@ -65,23 +55,13 @@ def gProbGenoInbreeding(likeMatrix, Pi, F, delta, S, N, G):
 				continue
 
 			# Call posterior maximum
-			if p0 > p1:
-				if p0 > p2: # G = 0
-					if p0/pSum > delta:
-						G[ind, s] = 0
-					else:
-						G[ind, s] = -9
-				else: # G = 2
-					if p2/pSum > delta:
-						G[ind, s] = 2
-					else:
-						G[ind, s] = -9
+			pVec = np.array([p0, p1, p2])
+			g = np.argmax(pVec)
 
-			else: # G = 1
-				if p1/pSum > delta:
-					G[ind, s] = 1
-				else:
-					G[ind, s] = -9
+			if (pVec[g]/pSum) > delta:
+				G[ind, s] = g
+			else:
+				G[ind, s] = -9
 
 ##### Genotype calling #####
 def callGeno(likeMatrix, Pi, F=None, delta=0.0, t=1):
