@@ -34,7 +34,7 @@ def readGzipBeagle(beagle, nUser, relFilter=None, post=False):
 
 				# Optional saves of site IDs and alleles info
 				if post:
-					snpVector = np.chararray(n, itemsize=16)
+					snpVector = np.chararray(n, itemsize=24)
 					alleleMatrix = np.chararray((n, 2), itemsize=8)
 			else:
 				if c == n:
