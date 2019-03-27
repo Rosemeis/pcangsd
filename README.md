@@ -1,6 +1,7 @@
 # PCAngsd
 
-**Version 0.973** 
+**Version 0.98**
+*I have rewritten PCAngsd to be based on Cython for speed and parallelization and is now compatible with any newer Python version. The older version based on the Numba library (only working with Python 2.7) is still available in version 0.973.*
 
 Framework for analyzing low depth next-generation sequencing (NGS) data in heterogeneous populations using principal component analysis (PCA). Population structure is inferred to detect the number of significant principal components which is used to estimate individual allele frequencies using genotype dosages in a SVD model. The estimated individual allele frequencies are then used in an probabilistic framework to update the genotype dosages such that an updated set of individual allele frequencies can be estimated iteratively based on inferred population structure. A covariance matrix can be estimated using the updated prior information of the estimated individual allele frequencies.
 
@@ -14,18 +15,18 @@ The estimated individual allele frequencies and principal components can be used
 * Genome selection scan
 * Kinship matrix
 
-The entire framework is written Python 2.7 based on Numpy data structures to take use of the Numba library for improving performances in bottlenecks. Multithreading has been added to take advantage of multiple cores and is highly recommended.
 
-## Get PCAngsd
+## Get PCAngsd and build
 ```
 git clone https://github.com/Rosemeis/pcangsd.git
 cd pcangsd/
+python setup.py build_ext --inplace
 ```
 
 ### Install dependencies
-The required set of Python packages are easily installed using the pip command and the python_packages.txt file included in the pcangsd folder.
+The required set of Python packages are easily installed using the pip command and the requirements.txt file included in the pcangsd folder.
 ```
-pip install --user -r python_packages.txt
+pip install --user -r requirements.txt
 ```
 
 ## Usage
