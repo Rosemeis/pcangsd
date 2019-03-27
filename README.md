@@ -37,6 +37,19 @@ PCAngsd is used by running the main caller file pcangsd.py. To see all available
 python pcangsd.py -h
 ```
 
+Since version 0.98, PCAngsd is now outputting solely in binary Numpy format (.npy). In order to read files in python:
+```python
+import numpy as np
+C = np.load("output.cov.npy") # Reads in estimated covariance matrix 
+```
+
+R can also read Numpy matrices using the "RcppCNPy" library:
+```R
+library(RcppCNPy)
+C <- npyLoad("output.cov.npy") # Reads in estimated covariance matrix
+```
+
+
 The only input PCAngsd needs is estimated genotype likelihoods in Beagle format. These can be estimated using [ANGSD](https://github.com/ANGSD/angsd).
 New functionality for using PLINK files has been added (version 0.9). Genotypes are automatically converted into a genotype likelihood matrix.
 
