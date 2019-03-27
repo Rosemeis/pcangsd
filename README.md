@@ -51,7 +51,7 @@ C <- npyLoad("output.cov.npy") # Reads in estimated covariance matrix
 
 
 The only input PCAngsd needs is estimated genotype likelihoods in Beagle format. These can be estimated using [ANGSD](https://github.com/ANGSD/angsd).
-New functionality for using PLINK files has been added (version 0.9). Genotypes are automatically converted into a genotype likelihood matrix.
+New functionality for using PLINK files has been added (version 0.9). Genotypes are automatically converted into a genotype likelihood matrix where the user can incorporate an error model.
 
 
 ## Citation
