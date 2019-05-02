@@ -55,5 +55,7 @@ New functionality for using PLINK files has been added (version 0.9). Genotypes 
 
 
 ## Citation
-Please cite our paper in GENETICS:
-[Inferring Population Structure and Admixture Proportions in Low-Depth NGS Data](http://www.genetics.org/content/210/2/719).
+Please cite our papers:
+
+Population structure: [Inferring Population Structure and Admixture Proportions in Low-Depth NGS Data](http://www.genetics.org/content/210/2/719).
+HWE test: [Testing for Hardy‐Weinberg Equilibrium in Structured Populations using Genotype or Low‐Depth NGS Data](https://onlinelibrary.wiley.com/doi/abs/10.1111/1755-0998.13019).
