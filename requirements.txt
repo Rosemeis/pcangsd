@@ -2,4 +2,4 @@ numpy
 scipy
 cython
 pandas
-pandas-plink
+pandas-plink=1.2.31
