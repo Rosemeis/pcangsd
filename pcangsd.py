@@ -22,7 +22,7 @@ import admixture
 
 ##### Argparse #####
 parser = argparse.ArgumentParser(prog="PCAngsd")
-parser.add_argument("--version", action="version", version="%(prog)s 0.98")
+parser.add_argument("--version", action="version", version="%(prog)s 0.981")
 parser.add_argument("-beagle", metavar="FILE",
 	help="Input file of genotype likelihoods in gzipped Beagle format from ANGSD")
 parser.add_argument("-plink", metavar="FILE-PREFIX",
@@ -89,6 +89,8 @@ parser.add_argument("-maf_save", action="store_true",
 	help="Save population allele frequencies")
 parser.add_argument("-indf_save", action="store_true",
 	help="Save individual allele frequencies")
+parser.add_argument("-dosage_save", action="store_true",
+	help="Save genotype dosages")
 parser.add_argument("-sites_save", action="store_true",
 	help="Save site IDs")
 parser.add_argument("-post_save", action="store_true",
@@ -98,7 +100,7 @@ parser.add_argument("-threads", metavar="INT", type=int, default=1,
 parser.add_argument("-o", metavar="OUTPUT", help="Prefix output file name", default="pcangsd")
 args = parser.parse_args()
 
-print("PCAngsd 0.98")
+print("PCAngsd 0.981")
 print("Using " + str(args.threads) + " thread(s)\n")
 
 # Individual filtering based on relatedness
@@ -116,7 +118,7 @@ if args.relate is not None:
 	
 	# Create or update index vector
 	n = sum(unrelatedI)
-	np.save(args.o + ".unrelated", unrelatedI)
+	np.save(args.o + ".unrelated", unrelatedI.astype(int))
 	print("Keeping " + str(n) + " individuals after filtering (removing " + str(phi.shape[0] - n) + ")")
 	print("Boolean vector of unrelated individuals saved as " + str(args.o) + ".unrelated.npy (Binary)")
 	unrelatedI = np.repeat(unrelatedI, 3)
@@ -177,8 +179,8 @@ print("Estimating covariance matrix")
 C, Pi, e = covariance.pcaEM(L, args.e, f, args.iter, args.tole, args.threads)
 
 # Save covariance matrix
-np.save(args.o + ".cov", C.astype(float))
-print("Saved covariance matrix as " + str(args.o) + ".cov.npy (Binary)\n")
+np.savetxt(args.o + ".cov", C)
+print("Saved covariance matrix as " + str(args.o) + ".cov (Text)\n")
 del C
 
 ##### Selection scan
@@ -336,6 +338,14 @@ if args.indf_save:
 	np.save(args.o + ".indf", Pi.astype(float))
 	print("Saved individual allele frequencies as " + str(args.o) + ".indf.npy (Binary)\n")
 
+if args.dosage_save:
+	import covariance_cy
+	E = np.empty((L.shape[0]//3, L.shape[1]), dtype=np.float32) # Dosage matrix
+	covariance_cy.updatePCAngsd(L, Pi, E, args.threads)
+	np.save(args.o + ".dosage", E.astype(float))
+	print("Saved genotype dosages as " + str(args.o) + ".dosage.npy (Binary)\n")
+	del E
+
 if args.post_save or args.sites_save:
 	print("Loading site information")
 	import pandas as pd
@@ -351,7 +361,7 @@ if args.post_save or args.sites_save:
 	infoDF.reset_index(drop=True)
 	if args.sites_save:
 		infoDF.iloc[:,0].to_csv(args.o + ".sites", header=False, index=False)
-		print("Saved site IDs as " + str(args.o) + ".sites")
+		print("Saved site IDs as " + str(args.o) + ".sites (Text)")
 	if args.post_save:
 		import shared
 		if args.iter != 0:
@@ -365,4 +375,4 @@ if args.post_save or args.sites_save:
 		else:
 			infoHeader = ["marker", "allele1", "allele2"] + [fam["iid"][j] for j in range(L.shape[0]//3) for i in [j, j, j]]
 		writeBeagle(L, infoDF, infoHeader)
-		print("Saved posterior genotype probabilities as " + str(args.o) + ".post.beagle")
+		print("Saved posterior genotype probabilities as " + str(args.o) + ".post.beagle (Text)")
