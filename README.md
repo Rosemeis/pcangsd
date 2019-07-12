@@ -17,6 +17,7 @@ The estimated individual allele frequencies and principal components can be used
 
 
 ## Get PCAngsd and build
+It is assumed that OpenMP is installed.
 ```
 git clone https://github.com/Rosemeis/pcangsd.git
 cd pcangsd/
@@ -37,16 +38,18 @@ PCAngsd is used by running the main caller file pcangsd.py. To see all available
 python pcangsd.py -h
 ```
 
-Since version 0.98, PCAngsd is now outputting solely in binary Numpy format (.npy). In order to read files in python:
+Since version 0.98, PCAngsd is now outputting solely in binary Numpy format (.npy) except for the covariance matrix. In order to read files in python:
 ```python
 import numpy as np
-C = np.load("output.cov.npy") # Reads in estimated covariance matrix 
+C = np.genfromtxt("output.cov") # Reads in estimated covariance matrix
+S = np.load("output.selection.npy") # Reads results from selection scan
 ```
 
 R can also read Numpy matrices using the "RcppCNPy" library:
 ```R
 library(RcppCNPy)
-C <- npyLoad("output.cov.npy") # Reads in estimated covariance matrix
+C <- as.matrix(read.table("output.cov")) # Reads in estimated covariance matrix
+S <- npyLoad("output.selection.npy") # Reads results from selection scan
 ```
 
 
