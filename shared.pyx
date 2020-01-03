@@ -2,36 +2,9 @@ import numpy as np
 cimport numpy as np
 from cython.parallel import prange
 from cython import boundscheck, wraparound
-from libc.math cimport sqrt, isnan
+from libc.math cimport sqrt
 
 ##### Shared Cython functions #####
-
-# PLINK converter to genotype likelihoods
-@boundscheck(False)
-@wraparound(False)
-cpdef convertBed(float[:,::1] L, double[:,::1] G, float e, int t):
-	cdef int n = G.shape[0]
-	cdef int m = G.shape[1]
-	cdef int i, j
-	with nogil:
-		for i in prange(n, num_threads=t):
-			for j in range(m):
-				if isnan(G[i,j]): # Missing site
-					L[3*i,j] = 0.333333
-					L[3*i+1,j] = 0.333333
-					L[3*i+2,j] = 0.333333
-				elif G[i,j] == 0.0:
-					L[3*i,j] = e*e
-					L[3*i+1,j] = 2*(1 - e)*e
-					L[3*i+2,j] = (1 - e)*(1 - e)
-				elif G[i,j] == 1.0:
-					L[3*i,j] = (1 - e)*e
-					L[3*i+1,j] = (1 - e)*(1 - e) + e*e
-					L[3*i+2,j] = (1 - e)*e
-				elif G[i,j] == 2.0:
-					L[3*i,j] = (1 - e)*(1 - e)
-					L[3*i+1,j] = 2*(1 - e)*e
-					L[3*i+2,j] = e*e
 
 # Root mean squared error (1D)
 @boundscheck(False)

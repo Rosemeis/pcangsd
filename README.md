@@ -1,6 +1,6 @@
 # PCAngsd
 
-**Version 0.98**
+**Version 0.982**
 *I have rewritten PCAngsd to be based on Cython for speed and parallelization and is now compatible with any newer Python version. The older version based on the Numba library (only working with Python 2.7) is still available in version 0.973.*
 
 Framework for analyzing low depth next-generation sequencing (NGS) data in heterogeneous populations using principal component analysis (PCA). Population structure is inferred to detect the number of significant principal components which is used to estimate individual allele frequencies using genotype dosages in a SVD model. The estimated individual allele frequencies are then used in an probabilistic framework to update the genotype dosages such that an updated set of individual allele frequencies can be estimated iteratively based on inferred population structure. A covariance matrix can be estimated using the updated prior information of the estimated individual allele frequencies.
@@ -17,7 +17,6 @@ The estimated individual allele frequencies and principal components can be used
 
 
 ## Get PCAngsd and build
-It is assumed that OpenMP is installed.
 ```
 git clone https://github.com/Rosemeis/pcangsd.git
 cd pcangsd/
@@ -38,18 +37,16 @@ PCAngsd is used by running the main caller file pcangsd.py. To see all available
 python pcangsd.py -h
 ```
 
-Since version 0.98, PCAngsd is now outputting solely in binary Numpy format (.npy) except for the covariance matrix. In order to read files in python:
+Since version 0.98, PCAngsd is now outputting solely in binary Numpy format (.npy). In order to read files in python:
 ```python
 import numpy as np
-C = np.genfromtxt("output.cov") # Reads in estimated covariance matrix
-S = np.load("output.selection.npy") # Reads results from selection scan
+C = np.load("output.cov.npy") # Reads in estimated covariance matrix 
 ```
 
 R can also read Numpy matrices using the "RcppCNPy" library:
 ```R
 library(RcppCNPy)
-C <- as.matrix(read.table("output.cov")) # Reads in estimated covariance matrix
-S <- npyLoad("output.selection.npy") # Reads results from selection scan
+C <- npyLoad("output.cov.npy") # Reads in estimated covariance matrix
 ```
 
 

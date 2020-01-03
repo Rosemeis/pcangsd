@@ -9,6 +9,7 @@ __author__ = "Jonas Meisner"
 import argparse
 import numpy as np
 import os
+import subprocess
 
 # Import functions
 import reader
@@ -20,9 +21,16 @@ import kinship
 import callGeno
 import admixture
 
+### PLINK helper function
+# Find length of PLINK files
+def extract_length(filename):
+	process = subprocess.Popen(['wc', '-l', filename], stdout=subprocess.PIPE)
+	result, err = process.communicate()
+	return int(result.split()[0])
+
 ##### Argparse #####
 parser = argparse.ArgumentParser(prog="PCAngsd")
-parser.add_argument("--version", action="version", version="%(prog)s 0.981")
+parser.add_argument("--version", action="version", version="%(prog)s 0.982")
 parser.add_argument("-beagle", metavar="FILE",
 	help="Input file of genotype likelihoods in gzipped Beagle format from ANGSD")
 parser.add_argument("-plink", metavar="FILE-PREFIX",
@@ -47,6 +55,8 @@ parser.add_argument("-hwe_tole", metavar="FLOAT", type=float, default=1e-6,
 	help="Tolerance for HWE filtering of sites")
 parser.add_argument("-selection", action="store_true",
 	help="Perform PC-based genome-wide selection scan")
+parser.add_argument("-snp_weights", action="store_true",
+	help="Estimate SNP weights")
 parser.add_argument("-kinship", action="store_true",
 	help="Compute kinship matrix adjusted for population structure")
 parser.add_argument("-relate", metavar="FILE",
@@ -95,16 +105,27 @@ parser.add_argument("-sites_save", action="store_true",
 	help="Save site IDs")
 parser.add_argument("-post_save", action="store_true",
 	help="Save posterior genotype probabilities")
+parser.add_argument("-filter", metavar="FILE",
+	help="Input file of vector for filtering individuals")
 parser.add_argument("-threads", metavar="INT", type=int, default=1,
 	help="Number of threads")
 parser.add_argument("-o", metavar="OUTPUT", help="Prefix output file name", default="pcangsd")
 args = parser.parse_args()
 
-print("PCAngsd 0.981")
+print("PCAngsd 0.982")
 print("Using " + str(args.threads) + " thread(s)\n")
+
+# Individual filtering based on vector
+if args.filter is not None:
+	assert args.relate is None, "PCAngsd can't use two different filtering schemes for individuals!"
+	filterI = np.load(args.filter).astype(bool)
+	n = sum(filterI)
+	print("Keeping " + str(n) + " individuals after filtering (removing " + str(filterI.shape[0] - n) + ")")
+	filterI = np.repeat(filterI, 3)
 
 # Individual filtering based on relatedness
 if args.relate is not None:
+	assert args.filter is None, "PCAngsd can't use two different filtering schemes for individuals!"
 	phi = np.load(args.relate)
 
 	# Boolean vector of unrelated individuals
@@ -129,20 +150,30 @@ if args.beagle is not None:
 	print("Parsing Beagle file")
 	assert os.path.isfile(args.beagle), "Beagle file doesn't exist!"
 	assert args.beagle[-3:] == ".gz", "Beagle file must be in gzip format!"
-	if args.relate is None:
-		L = reader.readBeagle(args.beagle).T
-	else:
+	if args.filter is not None:
+		L = reader.readBeagleUnrelated(args.beagle, filterI).T
+		del filterI
+	elif args.relate is not None:
 		L = reader.readBeagleUnrelated(args.beagle, unrelatedI).T
 		del unrelatedI
+	else:
+		L = reader.readBeagle(args.beagle).T
 elif args.plink is not None:
+	assert (args.relate is None) and (args.filter is None), "Please perform individual filtering in PLINK!"
 	print("Parsing PLINK files")
 	assert os.path.isfile(args.plink + ".bed"), "Bed file doesn't exist"
-	from pandas_plink import read_plink
-	import shared
-	bim, fam, bed = read_plink(args.plink, verbose=False)
-	L = np.empty((3*bed.shape[1], bed.shape[0]), dtype=np.float32)
-	shared.convertBed(L, bed.T.compute(), args.plink_error, args.threads)
-	del bed
+	assert os.path.isfile(args.plink + ".bim"), "Bim file doesn't exist"
+	assert os.path.isfile(args.plink + ".fam"), "Fam file doesn't exist"
+	# Finding length of .fam and .bim file and read .bed file into NumPy array
+	n = extract_length(args.plink + ".fam")
+	m = extract_length(args.plink + ".bim")
+	G = np.zeros((n, m), dtype=np.int8)
+	reader.readBed(args.plink + ".bed", G, n, m)
+
+	# Converting genotype matrix into genotype likelihoods
+	L = np.empty((3*n, m), dtype=np.float32)
+	reader.convertBed(L, G, args.plink_error, args.threads)
+	del G
 
 n, m = L.shape
 n //= 3
@@ -183,7 +214,7 @@ np.savetxt(args.o + ".cov", C)
 print("Saved covariance matrix as " + str(args.o) + ".cov (Text)\n")
 del C
 
-##### Selection scan
+##### Selection scan and/or SNP weights
 if args.selection:
 	print("Performing PC-based selection scan")
 	Dsquared = selection.selectionScan(L, Pi, f, e, args.threads)
@@ -194,6 +225,17 @@ if args.selection:
 
 	# Release memory
 	del Dsquared
+
+if args.snp_weights:
+	print("Estimating SNP weights")
+	snpW = selection.snpWeights(L, Pi, f, e, args.threads)
+
+	# Save SNP weights
+	np.save(args.o + ".weights", snpW.astype(float))
+	print("Saved SNP weights as " + str(args.o) + ".weights.npy (Binary)\n")
+
+	# Release memory
+	del snpW
 
 ##### Kinship
 if args.kinship:
@@ -352,8 +394,7 @@ if args.post_save or args.sites_save:
 	if args.beagle is not None:
 		infoDF = pd.read_csv(args.beagle, sep="\t", header=0, usecols=[0,1,2], compression="gzip", dtype=str)
 	else:
-		siteS = bim["chrom"].astype(str)+'_'+bim["pos"].astype(str)
-		infoDF = pd.DataFrame(dict(marker=siteS, allele1=bim["a1"], allele2=bim["a0"]), dtype=str)
+		infoDF = pd.read_csv(args.plink + ".bim", sep="\t", header=None, usecols=[1,4,5], dtype=str)
 	if args.minMaf > 0.0:
 		infoDF = infoDF[maskMAF]
 	if args.hwe is not None:
@@ -373,6 +414,7 @@ if args.post_save or args.sites_save:
 		if args.beagle is not None:
 			infoHeader = ["marker", "allele1", "allele2"] + ["Ind" + str(i) for j in range(L.shape[0]//3) for i in [j, j, j]]
 		else:
-			infoHeader = ["marker", "allele1", "allele2"] + [fam["iid"][j] for j in range(L.shape[0]//3) for i in [j, j, j]]
+			famDF = pd.read_csv(args.plink + ".fam", sep=" ", header=None, usecols=[1], dtype=str)
+			infoHeader = ["marker", "allele1", "allele2"] + [famDF.iloc[j,0] for j in range(L.shape[0]//3) for i in [j, j, j]]
 		writeBeagle(L, infoDF, infoHeader)
 		print("Saved posterior genotype probabilities as " + str(args.o) + ".post.beagle (Text)")

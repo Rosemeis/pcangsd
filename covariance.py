@@ -26,7 +26,6 @@ def pcaEM(L, e, f, m_iter, m_tole, t):
 
 	# Initiate matrices
 	E = np.empty((n, m), dtype=np.float32)
-	X = np.empty((n, m), dtype=np.float32)
 	dCov = np.zeros(n, dtype=np.float32)
 
 	# Estimate covariance matrix (Fumagalli) and infer number of PCs
@@ -102,5 +101,6 @@ def pcaEM(L, e, f, m_iter, m_tole, t):
 	covariance_cy.standardizeE(E, f, t)
 	C = np.dot(E, E.T)/m
 	np.fill_diagonal(C, dCov)
+	del E
 
 	return C, Pi, K
