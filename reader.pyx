@@ -71,58 +71,40 @@ cpdef readBeagleUnrelated(beagle, relBool):
 		L_np[i] = np.asarray(<float[:nU]> L_ptr)
 	return L_np
 
-# Read .bed file
-@boundscheck(False)
-@wraparound(False)
-cpdef readBed(str bedfile, signed char[:,::1] G, int n, int m):
-	cdef signed char[4] recode = [0, -9, 1, 2] # PCAngsd format
-	cdef unsigned char mask = 3
-	cdef unsigned char byte, code
-	cdef unsigned char start[3]
-	cdef int bytepart = 0, i = 0, j = 0
-	cdef FILE *bed = fopen(bedfile.encode('utf-8'), "r")
-	fread(start, 1, 3, bed) # Read first three bytes - 0x6c, 0x1b, and 0x01
-
-	while True:
-		if bytepart == 0: # Read byte
-			fread(&byte, 1, 1, bed)
-			bytepart = 4
-		code = byte & mask
-		G[i,j] = recode[code]
-		byte = byte >> 2
-		bytepart -= 1
-		i += 1
-		if i == n:
-			i = 0
-			bytepart = 0
-			j += 1
-			if j == m:
-				break
-	fclose(bed)
-
 # PLINK converter to genotype likelihoods
 @boundscheck(False)
 @wraparound(False)
-cpdef convertBed(float[:,::1] L, signed char[:,::1] G, float e, int t):
-	cdef int n = G.shape[0]
-	cdef int m = G.shape[1]
-	cdef int i, j
+cpdef convertBed(float[:,::1] L, unsigned char[:,::1] G, float e, int Bi, int n, int m, int t):
+	cdef signed char[4] recode = [0, 9, 1, 2] # PCAngsd format
+	cdef unsigned char mask = 3
+	cdef unsigned char byte, code
+	cdef int i, j, b, bytepart
+
 	with nogil:
-		for i in prange(n, num_threads=t):
-			for j in range(m):
-				if G[i,j] == -9: # Missing site
-					L[3*i,j] = 0.333333
-					L[3*i+1,j] = 0.333333
-					L[3*i+2,j] = 0.333333
-				elif G[i,j] == 0:
-					L[3*i,j] = e*e
-					L[3*i+1,j] = 2*(1 - e)*e
-					L[3*i+2,j] = (1 - e)*(1 - e)
-				elif G[i,j] == 1:
-					L[3*i,j] = (1 - e)*e
-					L[3*i+1,j] = (1 - e)*(1 - e) + e*e
-					L[3*i+2,j] = (1 - e)*e
-				elif G[i,j] == 2:
-					L[3*i,j] = (1 - e)*(1 - e)
-					L[3*i+1,j] = 2*(1 - e)*e
-					L[3*i+2,j] = e*e
+		for j in prange(m, num_threads=t, schedule='static'):
+			i = 0
+			for b in range(Bi):
+				byte = G[j,b]
+				for bytepart in range(4):
+					code = recode[byte & mask]
+					if code == 0:
+						L[3*i,j] = e*e
+						L[3*i+1,j] = 2*(1 - e)*e
+						L[3*i+2,j] = (1 - e)*(1 - e)
+					elif code == 1:
+						L[3*i,j] = (1 - e)*e
+						L[3*i+1,j] = (1 - e)*(1 - e) + e*e
+						L[3*i+2,j] = (1 - e)*e
+					elif code == 2:
+						L[3*i,j] = (1 - e)*(1 - e)
+						L[3*i+1,j] = 2*(1 - e)*e
+						L[3*i+2,j] = e*e
+					else: # Missing site
+						L[3*i,j] = 0.333333
+						L[3*i+1,j] = 0.333333
+						L[3*i+2,j] = 0.333333
+
+					byte = byte >> 2
+					i = i + 1
+					if i == n:
+						break

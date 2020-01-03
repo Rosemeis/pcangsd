@@ -10,6 +10,7 @@ import argparse
 import numpy as np
 import os
 import subprocess
+from math import ceil
 
 # Import functions
 import reader
@@ -167,13 +168,16 @@ elif args.plink is not None:
 	# Finding length of .fam and .bim file and read .bed file into NumPy array
 	n = extract_length(args.plink + ".fam")
 	m = extract_length(args.plink + ".bim")
-	G = np.zeros((n, m), dtype=np.int8)
-	reader.readBed(args.plink + ".bed", G, n, m)
+	bed = open(args.plink + ".bed", "rb")
+	B = np.fromfile(bed, dtype=np.uint8, offset=3)
+	bed.close()
 
+	Bi = ceil(n/4) # Length of bytes to describe n individuals
+	G = B.reshape((m, Bi))
 	# Converting genotype matrix into genotype likelihoods
 	L = np.empty((3*n, m), dtype=np.float32)
-	reader.convertBed(L, G, args.plink_error, args.threads)
-	del G
+	reader.convertBed(L, G, args.plink_error, Bi, n, m, args.threads)
+	del B, G
 
 n, m = L.shape
 n //= 3
