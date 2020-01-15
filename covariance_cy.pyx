@@ -135,7 +135,7 @@ cpdef updatePi(float[:,::1] Pi, float[::1] f, int t):
 # RMSE with sign checking
 @boundscheck(False)
 @wraparound(False)
-cpdef rmse2d_eig(float[:,::1] A, float[:,::1] B):
+cpdef rmse2d_eig(float[:,:] A, float[:,:] B):
 	cdef int n = A.shape[0]
 	cdef int m = A.shape[1]
 	cdef int i, j
