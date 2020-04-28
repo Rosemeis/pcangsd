@@ -21,6 +21,7 @@ import selection
 import kinship
 import callGeno
 import admixture
+import tree
 
 ### PLINK helper function
 # Find length of PLINK files
@@ -31,7 +32,7 @@ def extract_length(filename):
 
 ##### Argparse #####
 parser = argparse.ArgumentParser(prog="PCAngsd")
-parser.add_argument("--version", action="version", version="%(prog)s 0.982")
+parser.add_argument("--version", action="version", version="%(prog)s 0.985")
 parser.add_argument("-beagle", metavar="FILE",
 	help="Input file of genotype likelihoods in gzipped Beagle format from ANGSD")
 parser.add_argument("-plink", metavar="FILE-PREFIX",
@@ -96,6 +97,14 @@ parser.add_argument("-admix_depth", metavar="INT", type=int, default=5,
 	help="Depth in automatic search of alpha")
 parser.add_argument("-admix_save", action="store_true",
 	help="Save population-specific allele frequencies (admixture)")
+parser.add_argument("-admix_selection", action="store_true",
+	help="Perform admixture selection scan (PROTOTYPE)")
+parser.add_argument("-admix_fst", action="store_true",
+	help="Estimate continuous Fst values (PROTOTYPE)")
+parser.add_argument("-admix_tree", action="store_true",
+	help="Construct NJ tree with ancestral populations (PROTOTYPE)")
+parser.add_argument("-tree", action="store_true",
+	help="Construct NJ tree (PROTOTYPE)")
 parser.add_argument("-maf_save", action="store_true",
 	help="Save population allele frequencies")
 parser.add_argument("-indf_save", action="store_true",
@@ -107,19 +116,26 @@ parser.add_argument("-sites_save", action="store_true",
 parser.add_argument("-post_save", action="store_true",
 	help="Save posterior genotype probabilities")
 parser.add_argument("-filter", metavar="FILE",
-	help="Input file of vector for filtering individuals")
+	help="Input file of vector for filtering individuals (PROTOTYPE)")
 parser.add_argument("-threads", metavar="INT", type=int, default=1,
 	help="Number of threads")
 parser.add_argument("-o", metavar="OUTPUT", help="Prefix output file name", default="pcangsd")
 args = parser.parse_args()
 
-print("PCAngsd 0.982")
+print("PCAngsd 0.985")
 print("Using " + str(args.threads) + " thread(s)\n")
+
+# Check parsing
+if (args.admix_selection) or (args.admix_fst) or (args.admix_tree):
+	assert args.admix, "-admix is needed for admixture derived functions!"
 
 # Individual filtering based on vector
 if args.filter is not None:
 	assert args.relate is None, "PCAngsd can't use two different filtering schemes for individuals!"
-	filterI = np.load(args.filter).astype(bool)
+	if args.filter[-4:] == ".npy":
+		filterI = np.load(args.filter).astype(bool)
+	else:
+		filterI = np.genfromtxt(args.filter, dtype=int).astype(bool)
 	n = sum(filterI)
 	print("Keeping " + str(n) + " individuals after filtering (removing " + str(filterI.shape[0] - n) + ")")
 	filterI = np.repeat(filterI, 3)
@@ -216,6 +232,8 @@ C, Pi, e = covariance.pcaEM(L, args.e, f, args.iter, args.tole, args.threads)
 # Save covariance matrix
 np.savetxt(args.o + ".cov", C)
 print("Saved covariance matrix as " + str(args.o) + ".cov (Text)\n")
+
+# Release memory
 del C
 
 ##### Selection scan and/or SNP weights
@@ -363,8 +381,58 @@ if args.admix:
 			print("Saved ancestral allele frequencies as " + str(args.o) + ".admix.F.npy (Binary)")
 		print("\n")
 
+	# Admixture Fst values
+	if args.admix_fst:
+		Fst = admixture.admixFst(Q, F, args.threads)
+		np.save(args.o + ".admix.Fst", Fst.astype(float))
+		print("Saved Fst values as " + str(args.o) + ".admix.Fst.npy (Binary)\n")
+
+		# Release memory
+		del Fst
+
+	# Admxiture selection scan
+	if args.admix_selection:
+		Sb = admixture.admixScan(Pi, f, Q, args.threads)
+		np.save(args.o + ".admix.selection", Sb.astype(float))
+		print("Saved admixture selection statistics as " + str(args.o) + ".admix.selection.npy (Binary)\n")
+
+		# Release memory
+		del Sb
+
+	# Admixture tree (ancestral pops)
+	if args.admix_tree:
+		assert K > 2, "Must have more than 2 ancestral populations to construct tree!"
+		print("Constructing neighbour-joining tree based on ancestral allele frequencies")
+		admixC = admixture.admixCovar(F, f, args.threads)
+		newick = tree.constructTree(admixC)
+
+		# Save tree
+		with open(args.o + ".admix.tree", "w") as f_tree:
+			f_tree.write(newick)
+			f_tree.write(";\n")
+		print("Saved newick tree as " + str(args.o) + ".admix.tree\n")
+
+		# Release memory
+		del admixC, newick
+
 	# Release memory
 	del Q, F
+
+##### Tree estimation
+if args.tree:
+	print("Constructing neighbour-joining tree based on distance matrix")
+	treeC = tree.covarPi(Pi, f, args.threads)
+	newick = tree.constructTree(treeC)
+
+	# Save tree
+	with open(args.o + ".tree", "w") as f_tree:
+		f_tree.write(newick)
+		f_tree.write(";\n")
+	print("Saved newick tree as " + str(args.o) + ".tree\n")
+
+	# Release memory
+	del treeC, newick
+
 
 ##### Optional saves
 def writeBeagle(L, infoDF, infoHeader):
@@ -381,8 +449,8 @@ if args.maf_save:
 	print("Saved population allele frequencies as " + str(args.o) + ".maf.npy (Binary)\n")
 
 if args.indf_save:
-	np.save(args.o + ".indf", Pi.astype(float))
-	print("Saved individual allele frequencies as " + str(args.o) + ".indf.npy (Binary)\n")
+	np.save(args.o + ".indf", Pi)
+	print("Saved individual allele frequencies as " + str(args.o) + ".indf.npy (Binary - 32-bit)\n")
 
 if args.dosage_save:
 	import covariance_cy

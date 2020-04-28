@@ -161,3 +161,48 @@ def alphaSearch(L, Pi, K, aEnd, admix_iter, admix_tole, seed, batch, depth, t):
 			aMin = aMid - aStep
 			aMax = aMid + aStep
 	return Q_best, F_best, L_best, aBest
+
+# Admixture selection scan
+def admixFst(Q, F, t):
+	n, K = Q.shape
+	m = F.shape[0]
+
+	# Vector prep
+	Qk = np.sum(Q, axis=0)/float(n)
+	Fst = np.zeros(m, dtype=np.float32)
+
+	# Run scan
+	admixture_cy.admixFst(F, Qk, Fst, t)
+	return Fst
+
+# Admixture covariance matrix (K x K)
+def admixCovar(F, f, t):
+	m, K = F.shape
+
+	# Vector prep
+	Fnorm = np.zeros((m, K), dtype=np.float32)
+
+	# Estimate cov
+	admixture_cy.admixNorm(F, f, Fnorm, t)
+	return np.dot(Fnorm.T, Fnorm)/float(m)
+
+# Admixture selection scan
+def admixScan(Pi, f, Q, t):
+	n, m = Pi.shape
+	K = Q.shape[1]
+
+	# Prep
+	PiNorm = np.zeros((n, m), dtype=np.float32)
+	S = np.zeros((m, K), dtype=np.float32)
+	B = np.zeros((n, K), dtype=np.float32)
+	Qavg = np.sum(Q, axis=0)/float(n)
+
+	# Call functions
+	admixture_cy.centerQ(Q, Qavg, B, t) # Center "branch" matrix
+	admixture_cy.standardizePi(Pi, f, PiNorm, t) # Standardize IAF
+	C = np.dot(PiNorm, PiNorm.T)/m # IAF covariance mat
+	del PiNorm
+	for k in range(K):
+		bCb = np.dot(B[:,k], np.dot(C, B[:,k])) # dot(b.T, dot(C, b))
+		admixture_cy.estimateScan(Pi, B[:,k], f, bCb, S[:,k], t)
+	return S
