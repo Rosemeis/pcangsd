@@ -35,7 +35,7 @@ def constructTree(Covar):
 		Q = np.zeros(D0.shape, dtype=np.float32)
 		tree_cy.estimateQ(D0, Q, Dsum)
 		np.fill_diagonal(Q, np.inf)
-		pairA, pairB = np.unravel_index(np.argmin(Q), Q.shape)
+		pairA, pairB = sorted(np.unravel_index(np.argmin(Q), Q.shape))
 		del Q
 		i2 = indIndex.pop(pairB)
 		i1 = indIndex.pop(pairA)
