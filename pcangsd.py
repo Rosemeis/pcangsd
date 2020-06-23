@@ -32,7 +32,7 @@ def extract_length(filename):
 
 ##### Argparse #####
 parser = argparse.ArgumentParser(prog="PCAngsd")
-parser.add_argument("--version", action="version", version="%(prog)s 0.985")
+parser.add_argument("--version", action="version", version="%(prog)s 0.986")
 parser.add_argument("-beagle", metavar="FILE",
 	help="Input file of genotype likelihoods in gzipped Beagle format from ANGSD")
 parser.add_argument("-plink", metavar="FILE-PREFIX",
@@ -117,12 +117,14 @@ parser.add_argument("-post_save", action="store_true",
 	help="Save posterior genotype probabilities")
 parser.add_argument("-filter", metavar="FILE",
 	help="Input file of vector for filtering individuals (PROTOTYPE)")
+parser.add_argument("-noStd", action="store_true",
+	help="No standardization for covariance estimation")
 parser.add_argument("-threads", metavar="INT", type=int, default=1,
 	help="Number of threads")
 parser.add_argument("-o", metavar="OUTPUT", help="Prefix output file name", default="pcangsd")
 args = parser.parse_args()
 
-print("PCAngsd 0.985")
+print("PCAngsd 0.986")
 print("Using " + str(args.threads) + " thread(s)\n")
 
 # Check parsing
@@ -227,7 +229,7 @@ if args.hwe is not None:
 
 ##### PCAngsd - Individual allele frequencies and covariance matrix #####
 print("Estimating covariance matrix")
-C, Pi, e = covariance.pcaEM(L, args.e, f, args.iter, args.tole, args.threads)
+C, Pi, e = covariance.pcaEM(L, args.e, f, args.iter, args.tole, args.noStd, args.threads)
 
 # Save covariance matrix
 np.savetxt(args.o + ".cov", C)
@@ -349,7 +351,7 @@ if args.admix:
 					print("Saved admixture proportions as " + str(args.o) + ".admix.Q.a" + str(aAlpha) \
 						+ ".s" + str(aSeed) + ".npy (Binary)")
 					if args.admix_save:
-						np.save(args.o + ".admix.F.a" + str(aAlpha) + ".s" + str(aSeed), F.T.astype(float))
+						np.save(args.o + ".admix.F.a" + str(aAlpha) + ".s" + str(aSeed), F.astype(float))
 						print("Saved ancestral allele frequencies as " + str(args.o) + ".admix.F.a" \
 							+ str(aAlpha) + ".s" + str(aSeed) + ".npy (Binary)")
 					print("\n")
@@ -363,7 +365,7 @@ if args.admix:
 			np.save(args.o + ".admix.Q", Q.astype(float))
 			print("Saved admixture proportions as " + str(args.o) + ".admix.Q.npy (Binary)")
 			if args.admix_save:
-				np.save(args.o + ".admix.F", F.T.astype(float))
+				np.save(args.o + ".admix.F", F.astype(float))
 				print("Saved ancestral allele frequencies as " + str(args.o) + ".admix.F.npy (Binary)")
 			print("\n")
 	else:
@@ -377,7 +379,7 @@ if args.admix:
 		np.save(args.o + ".admix.Q", Q.astype(float))
 		print("Saved admixture proportions as " + str(args.o) + ".admix.Q.npy (Binary)")
 		if args.admix_save:
-			np.save(args.o + ".admix.F", F.T.astype(float))
+			np.save(args.o + ".admix.F", F.astype(float))
 			print("Saved ancestral allele frequencies as " + str(args.o) + ".admix.F.npy (Binary)")
 		print("\n")
 
@@ -411,6 +413,7 @@ if args.admix:
 			f_tree.write(newick)
 			f_tree.write(";\n")
 		print("Saved newick tree as " + str(args.o) + ".admix.tree\n")
+		np.savetxt(args.o + ".admix.tree.cov", admixC)
 
 		# Release memory
 		del admixC, newick
@@ -429,6 +432,7 @@ if args.tree:
 		f_tree.write(newick)
 		f_tree.write(";\n")
 	print("Saved newick tree as " + str(args.o) + ".tree\n")
+	np.savetxt(args.o + ".tree.cov", treeC)
 
 	# Release memory
 	del treeC, newick

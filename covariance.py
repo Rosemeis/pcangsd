@@ -19,7 +19,7 @@ def estimateSVD(E, e, Pi):
 	return W
 
 ##### PCAngsd #####
-def pcaEM(L, e, f, m_iter, m_tole, t):
+def pcaEM(L, e, f, m_iter, m_tole, no_std, t):
 	n, m = L.shape # Dimension of likelihood matrix
 	n //= 3 # Number of individuals
 	K = e
@@ -97,8 +97,12 @@ def pcaEM(L, e, f, m_iter, m_tole, t):
 	del W, prevW
 
 	# Estimate covariance matrix (PCAngsd)
-	covariance_cy.covPCAngsd(L, f, Pi, E, dCov, t)
-	covariance_cy.standardizeE(E, f, t)
+	if no_std:
+		covariance_cy.covPCAngsdNoStd(L, f, Pi, E, dCov, t)
+		covariance_cy.centerE(E, f, t)
+	else:
+		covariance_cy.covPCAngsd(L, f, Pi, E, dCov, t)
+		covariance_cy.standardizeE(E, f, t)
 	C = np.dot(E, E.T)/m
 	np.fill_diagonal(C, dCov)
 	del E

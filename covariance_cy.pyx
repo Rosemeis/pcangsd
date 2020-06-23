@@ -68,7 +68,7 @@ cpdef covFumagalli(float[:,::1] L, float[::1] f, float[:,::1] E, float[::1] dCov
 				dCov[i] = dCov[i] + temp/(2*f[j]*(1 - f[j]))
 			dCov[i] = dCov[i]/m
 
-# Update posterior expectations of the genotypes including cov diagonal (Fumagalli method)
+# Update posterior expectations of the genotypes including cov diagonal (PCAngsd method)
 @boundscheck(False)
 @wraparound(False)
 cpdef covPCAngsd(float[:,::1] L, float[::1] f, float[:,::1] Pi, float[:,::1] E, float[::1] dCov, int t):
@@ -91,6 +91,31 @@ cpdef covPCAngsd(float[:,::1] L, float[::1] f, float[:,::1] Pi, float[:,::1] E, 
 				temp = temp + (1 - 2*f[j])*(1 - 2*f[j])*(p1/pSum)
 				temp = temp + (2 - 2*f[j])*(2 - 2*f[j])*(p2/pSum)
 				dCov[i] = dCov[i] + temp/(2*f[j]*(1 - f[j]))
+			dCov[i] = dCov[i]/m
+
+# Update posterior expectations of the genotypes including cov diagonal no standardization (PCAngsd method)
+@boundscheck(False)
+@wraparound(False)
+cpdef covPCAngsdNoStd(float[:,::1] L, float[::1] f, float[:,::1] Pi, float[:,::1] E, float[::1] dCov, int t):
+	cdef int n = L.shape[0]//3
+	cdef int m = L.shape[1]
+	cdef int i, j
+	cdef float p0, p1, p2, pSum, temp
+	with nogil:
+		for i in prange(n, num_threads=t):
+			dCov[i] = 0.0
+			for j in range(m):
+				p0 = L[3*i,j]*(1 - Pi[i,j])*(1 - Pi[i,j])
+				p1 = L[3*i+1,j]*2*Pi[i,j]*(1 - Pi[i,j])
+				p2 = L[3*i+2,j]*Pi[i,j]*Pi[i,j]
+				pSum = p0 + p1 + p2
+
+				# Update dosage and cov diagonal
+				E[i,j] = (p1 + 2*p2)/pSum
+				temp = (0 - 2*f[j])*(0 - 2*f[j])*(p0/pSum)
+				temp = temp + (1 - 2*f[j])*(1 - 2*f[j])*(p1/pSum)
+				temp = temp + (2 - 2*f[j])*(2 - 2*f[j])*(p2/pSum)
+				dCov[i] = dCov[i] + temp
 			dCov[i] = dCov[i]/m
 
 # Center posterior expectations of the genotype
