@@ -32,7 +32,7 @@ def extract_length(filename):
 
 ##### Argparse #####
 parser = argparse.ArgumentParser(prog="PCAngsd")
-parser.add_argument("--version", action="version", version="%(prog)s 0.986")
+parser.add_argument("--version", action="version", version="%(prog)s 0.99")
 parser.add_argument("-beagle", metavar="FILE",
 	help="Input file of genotype likelihoods in gzipped Beagle format from ANGSD")
 parser.add_argument("-plink", metavar="FILE-PREFIX",
@@ -57,8 +57,12 @@ parser.add_argument("-hwe_tole", metavar="FLOAT", type=float, default=1e-6,
 	help="Tolerance for HWE filtering of sites")
 parser.add_argument("-selection", action="store_true",
 	help="Perform PC-based genome-wide selection scan")
+parser.add_argument("-varimax", action="store_true",
+	help="Perform PC-based genome-wide selection scan on Varimax rotated basis")
 parser.add_argument("-snp_weights", action="store_true",
 	help="Estimate SNP weights")
+parser.add_argument("-pcadapt", action="store_true",
+	help="Perform pcadapt selection scan")
 parser.add_argument("-kinship", action="store_true",
 	help="Compute kinship matrix adjusted for population structure")
 parser.add_argument("-relate", metavar="FILE",
@@ -124,7 +128,7 @@ parser.add_argument("-threads", metavar="INT", type=int, default=1,
 parser.add_argument("-o", metavar="OUTPUT", help="Prefix output file name", default="pcangsd")
 args = parser.parse_args()
 
-print("PCAngsd 0.986")
+print("PCAngsd 0.99")
 print("Using " + str(args.threads) + " thread(s)\n")
 
 # Check parsing
@@ -246,9 +250,22 @@ if args.selection:
 	# Save test statistics
 	np.save(args.o + ".selection", Dsquared.astype(float))
 	print("Saved test statistics as " + str(args.o) + ".selection.npy (Binary)\n")
-
+	
 	# Release memory
 	del Dsquared
+
+if args.varimax:
+	print("Performing PC-based selection scan on Varimax rotated basis")
+	Dsquared, R = selection.varimaxScan(L, Pi, f, e, args.threads)
+
+	# Save test statistics
+	np.save(args.o + ".varimax.selection", Dsquared.astype(float))
+	print("Saved test statistics as " + str(args.o) + ".varimax.selection.npy (Binary)\n")	
+	np.save(args.o + ".varimax.rotation", R.astype(float))
+	print("Saved varimax rotation matrix as " + str(args.o) + ".varimax.rotation.npy (Binary)\n")
+	
+	# Release memory
+	del Dsquared, R
 
 if args.snp_weights:
 	print("Estimating SNP weights")
@@ -260,6 +277,17 @@ if args.snp_weights:
 
 	# Release memory
 	del snpW
+
+if args.pcadapt:
+	print("Performing pcadapt seletion scan")
+	Zscores = selection.pcadaptScan(L, Pi, f, e, args.threads)
+
+	# Save test statistics
+	np.save(args.o + ".pcadapt.zscores", Zscores.astype(float))
+	print("Saved z-scores as " + str(args.o) + ".pcadapt.zscores.npy (Binary)\n")
+
+	# Release memory
+	del Zscores
 
 ##### Kinship
 if args.kinship:

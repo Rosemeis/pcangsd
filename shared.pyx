@@ -64,6 +64,7 @@ cpdef emMaf_update(float[:,::1] L, float[::1] f, float[::1] newF, int t):
 			f[j] = newF[j]/n
 
 ##### Cython functions for selection.py #####
+# FastPCA
 @boundscheck(False)
 @wraparound(False)
 cpdef computeD(float[:,:] U, float[:,:] Dsquared):
@@ -73,6 +74,30 @@ cpdef computeD(float[:,:] U, float[:,:] Dsquared):
 	for j in range(m):
 		for i in range(k):
 			Dsquared[j,i] = (U[i,j]**2)*m
+
+# pcadapt
+@boundscheck(False)
+@wraparound(False)
+cpdef computeZ(float[:,::1] E, float[:,:] B, float[:,:] V, float[:,::1] Z):
+	cdef int n = E.shape[0]
+	cdef int m = E.shape[1]
+	cdef int K = V.shape[1]
+	cdef int i, j, k
+	cdef float rec, res
+	for j in range(m):
+		res = 0.0
+		for i in range(n):
+			rec = 0.0
+			for k in range(K):
+				rec = rec + V[i,k]*B[j,k]
+			res = res + (E[i,j] - rec)**2
+		res = sqrt(res/float(n-K))
+		if res > 0:
+			for k in range(K):
+				Z[j,k] = B[j,k]/res
+		else:
+			for k in range(K):
+				Z[j,k] = 0.0			
 
 ##### Cython functions for saving posterior genotype probabilities #####
 @boundscheck(False)
