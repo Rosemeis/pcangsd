@@ -1,88 +1,57 @@
 """
-Selection scan using principal components based on Galinsky et al. (2016)
-
-Outputs the chi-square distributed selection statistics for each of the top
-principal components.
+PCAngsd.
+Perform PC-based selection scans or extract SNP weights.
 """
 
 __author__ = "Jonas Meisner"
 
-# Import libraries
+# Libraries
 import numpy as np
-import covariance_cy
-import shared
 from scipy.sparse.linalg import svds
 
-# Selection scan
-def selectionScan(L, Pi, f, K, t):
-	n, m = Pi.shape # Dimensions
-	E = np.empty((n, m), dtype=np.float32)
-	Dsquared = np.empty((m, K), dtype=np.float32)
-	covariance_cy.updatePCAngsd(L, Pi, E, t)
-	covariance_cy.standardizeE(E, f, t)
+# Import scripts
+import shared_cy
+import covariance_cy
 
-	# Performing SVD on normalized expected genotypes
-	_, _, U = svds(E, k=K)
-	U = U[::-1, :]
-	shared.computeD(U, Dsquared)
-	return Dsquared
+##### Selection scans #####
+### FastPCA - Galinsky et al. ###
+def galinskyScan(L, P, f, K, t):
+    m, n = P.shape
+    E = np.zeros((m, n), dtype=np.float32)
+    D = np.zeros((m, K), dtype=np.float32)
+    covariance_cy.updatePCAngsd(L, P, E, t)
+    covariance_cy.standardizeE(E, f, t)
 
-# Selection scan - Varimax rotated basis
-def varimaxScan(L, Pi, f, K, t):
-	n, m = Pi.shape # Dimensions
-	E = np.empty((n, m), dtype=np.float32)
-	Dsquared = np.empty((m, K), dtype=np.float32)
-	covariance_cy.updatePCAngsd(L, Pi, E, t)
-	covariance_cy.standardizeE(E, f, t)	
+    # Perform SVD on standardized posterior expectations
+    U, _, _ = svds(E, k=K)
+    U = U[:,::-1]
+    shared_cy.computeD(U, D)
+    del E, U
+    return D
 
-	# Performing SVD on normalized expected genotypes
-	_, _, U = svds(E, k=K)
-	U = U[::-1, :]
-	Ut, R = varimaxRotation(U)
-	shared.computeD(Ut.T, Dsquared)
-	return Dsquared, R
+### pcadapt ###
+def pcadaptScan(L, P, f, K, t):
+    m, n = P.shape
+    E = np.zeros((m, n), dtype=np.float32)
+    Z = np.zeros((m, K), dtype=np.float32)
+    covariance_cy.updatePCAngsd(L, P, E, t)
+    covariance_cy.standardizeE(E, f, t)
 
-# SNP weights (un-normalized selection scan)
-def snpWeights(L, Pi, f, K, t):
-	n, m = Pi.shape # Dimensions
-	E = np.empty((n, m), dtype=np.float32)
-	covariance_cy.updatePCAngsd(L, Pi, E, t)
-	covariance_cy.standardizeE(E, f, t)
+    # Perform SVD on standardized posterior expectations
+    U, s, Vt = svds(E, k=K)
+    B = np.dot(U, np.diag(s)) # Betas (m x K)
+    shared_cy.computeZ(E, B, Vt, Z)
+    del B, E, U, s, Vt
+    return Z
 
-	# Performing SVD on normalized expected genotypes
-	_, s, U = svds(E, k=K)
-	snpW = U[::-1, :].T*(s[::-1]**2)/m # Scaling by eigenvalues (PC-scores)
-	return snpW
+##### SNP weights #####
+def snpWeights(L, P, f, K, t):
+    m, n = P.shape
+    E = np.zeros((m, n), dtype=np.float32)
+    covariance_cy.updatePCAngsd(L, P, E, t)
+    covariance_cy.standardizeE(E, f, t)
 
-# Varimax rotation (https://en.wikipedia.org/wiki/Talk:Varimax_rotation)
-def varimaxRotation(P):
-	k, m = P.shape
-	R = np.eye(k, dtype=np.float32)
-	d = 0.0
-	for i in range(20):
-		d_old = d
-		L = np.dot(P.T, R)
-		B = np.dot(P, L**3 - (1.0/m)*np.dot(L, np.diag(np.diag(np.dot(L.T, L)))))
-		U, s, V = np.linalg.svd(B)
-		R = np.dot(U, V)
-		d = np.sum(s)
-		if (d_old != 0) and (d < d_old*(1.0 + 1e-6)):
-			print(str(i+1) + " iterations performed")
-			break
-	return np.dot(P.T, R), R
-
-# pcadapt scan
-def pcadaptScan(L, Pi, f, K, t):
-	n, m = Pi.shape # Dimensions
-	E = np.empty((n, m), dtype=np.float32)
-	Z = np.empty((m, K), dtype=np.float32)
-	covariance_cy.updatePCAngsd(L, Pi, E, t)
-	covariance_cy.standardizeE(E, f, t)
-
-	# Performing SVD on normalized expected genotypes
-	V, s, U = svds(E, k=K)
-
-	# pcadapt computations
-	B = np.dot(U.T, np.diag(s)) # Betas (m x K)
-	shared.computeZ(E, B, V, Z)
-	return Z
+    # Perform SVD on standardized posterior expectations
+    U, s, _ = svds(E, k=K)
+    snpW = U[:,::-1]*(s[::-1]**2)/float(m) # Loadings
+    return snpW

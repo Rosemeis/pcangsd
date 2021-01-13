@@ -1,23 +1,23 @@
 # PCAngsd
 
-**Version 0.99**
-*I have rewritten PCAngsd to be based on Cython for speed and parallelization and it is now compatible with any newer Python version. The older version based on the Numba library (only working with Python 2.7) is still available in version 0.973.*
+**Version 1.0**
+*I have reworked a lot of the parallelization in PCAngsd and removed some of its clunky prototype features. Python 3.x versions will only be targeted in future updates (however, it might still be compatible with v.2.7).*
 
-Framework for analyzing low depth next-generation sequencing (NGS) data in heterogeneous populations using principal component analysis (PCA). Population structure is inferred to detect the number of significant principal components which is used to estimate individual allele frequencies using genotype dosages in a SVD model. The estimated individual allele frequencies are then used in an probabilistic framework to update the genotype dosages such that an updated set of individual allele frequencies can be estimated iteratively based on inferred population structure. A covariance matrix can be estimated using the updated prior information of the estimated individual allele frequencies.
+Framework for analyzing low-depth next-generation sequencing (NGS) data in heterogeneous/structured populations using principal component analysis (PCA). Population structure is inferred by estimating individual allele frequencies in an iterative approach using a truncated SVD model. The covariance matrix is estimated using the estimated individual allele frequencies as prior information for the unobserved genotypes in low-depth NGS data.
 
-The estimated individual allele frequencies and principal components can be used as prior knowledge in other probabilistic methods based on a same Bayesian principle. PCAngsd can perform the following analyses: 
+The estimated individual allele frequencies can further be used to account for population structure in other probabilistic methods. PCAngsd can perform the following analyses:
 
 * Covariance matrix
-* Genotype calling
-* Admixture
+* Admixture estimations
 * Inbreeding coefficients (both per-individual and per-site)
 * HWE test
-* Genome selection scan
-* Kinship matrix
+* Genome-wide selection scans
+* Genotype calling
+* Estimate NJ tree of samples
 
 
 ## Get PCAngsd and build
-```
+```bash
 git clone https://github.com/Rosemeis/pcangsd.git
 cd pcangsd/
 python setup.py build_ext --inplace
@@ -30,30 +30,35 @@ pip install --user -r requirements.txt
 ```
 
 ## Usage
-A full wiki of how to use all the features of PCAngsd is available at [popgen.dk](http://www.popgen.dk/software/index.php/PCAngsd). 
+A full wiki of how to use all the features of PCAngsd is available at [popgen.dk](http://www.popgen.dk/software/index.php/PCAngsd).
 
 PCAngsd is used by running the main caller file pcangsd.py. To see all available options use the following command:
-```
+```bash
 python pcangsd.py -h
+
+# Genotype likelihoods using 64 threads
+python pcangsd.py -beagle input.beagle.gz -out output -threads 64
+
+# PLINK files (using file-prefix, *.bed, *.bim, *.fam)
+python pcangsd.py -beagle input.plink -out output -threads 64
 ```
 
-Since version 0.98, PCAngsd is now outputting solely in binary Numpy format (.npy) except for the covariance matrix. In order to read files in python:
+PCAngsd will mostly output files in binary Numpy format (.npy) with a few exceptions. In order to read files in python:
 ```python
 import numpy as np
-C = np.genfromtxt("output.cov") # Reads in estimated covariance matrix 
+C = np.genfromtxt("output.cov") # Reads in estimated covariance matrix (text)
 D = np.load("output.selection.npy") # Reads PC based selection statistics
 ```
 
-R can also read Numpy matrices using the "RcppCNPy" library:
+R can also read Numpy matrices using the "RcppCNPy" R library:
 ```R
 library(RcppCNPy)
-C <- as.matrix(read.table("output.cov.npy")) # Reads in estimated covariance matrix
+C <- as.matrix(read.table("output.cov")) # Reads in estimated covariance matrix
 D <- npyLoad("output.selection.npy") # Reads PC based selection statistics
 ```
 
 
-The only input PCAngsd needs is estimated genotype likelihoods in Beagle format. These can be estimated using [ANGSD](https://github.com/ANGSD/angsd).
-New functionality for using PLINK files has been added (version 0.9). Genotypes are automatically converted into a genotype likelihood matrix where the user can incorporate an error model.
+PCAngsd accepts either genotype likelihoods in Beagle format or PLINK genotype files. Beagle files can be generated from BAM files using [ANGSD](https://github.com/ANGSD/angsd). For inference of population structure in genotype data with non-random missigness, we recommend our [EMU](https://github.com/Rosemeis/emu) software that performs accelerated EM-PCA, however with fewer functionalities than PCAngsd (#soon).
 
 
 ## Citation

@@ -3,175 +3,125 @@ cimport numpy as np
 from cython.parallel import prange
 from cython import boundscheck, wraparound
 from libc.math cimport sqrt
-from libc.stdlib cimport abort, malloc, free
 
 ##### Cython functions for covariance.py ######
-
-# Update posterior expectations of the genotypes (Fumagalli method)
+# Update posterior expectations (Fumagalli method)
 @boundscheck(False)
 @wraparound(False)
-cpdef updateFumagalli(float[:,::1] L, float[::1] f, float[:,::1] E, int t):
-	cdef int n = L.shape[0]//3
-	cdef int m = L.shape[1]
-	cdef int i, j
+cpdef updateNormal(float[:,::1] L, float[::1] f, float[:,::1] E, int t):
+	cdef int m = L.shape[0]
+	cdef int n = L.shape[1]//3
+	cdef int i, s
 	cdef float p0, p1, p2
 	with nogil:
-		for i in prange(n, num_threads=t):
-			for j in range(m):
-				p0 = L[3*i,j]*(1 - f[j])*(1 - f[j])
-				p1 = L[3*i+1,j]*2*f[j]*(1 - f[j])
-				p2 = L[3*i+2,j]*f[j]*f[j]
-
-				# Update dosage
-				E[i,j] = (p1 + 2*p2)/(p0 + p1 + p2)
-
-# Update posterior expectations of the genotypes (PCAngsd method)
-@boundscheck(False)
-@wraparound(False)
-cpdef updatePCAngsd(float[:,::1] L, float[:,::1] Pi, float[:,::1] E, int t):
-	cdef int n = L.shape[0]//3
-	cdef int m = L.shape[1]
-	cdef int i, j
-	cdef float p0, p1, p2
-	with nogil:
-		for j in prange(m, num_threads=t):
+		for s in prange(m, num_threads=t):
 			for i in range(n):
-				p0 = L[3*i,j]*(1 - Pi[i,j])*(1 - Pi[i,j])
-				p1 = L[3*i+1,j]*2*Pi[i,j]*(1 - Pi[i,j])
-				p2 = L[3*i+2,j]*Pi[i,j]*Pi[i,j]
+				p0 = L[s,3*i+0]*(1 - f[s])*(1 - f[s])
+				p1 = L[s,3*i+1]*2*f[s]*(1 - f[s])
+				p2 = L[s,3*i+2]*f[s]*f[s]
 
 				# Update dosage
-				E[i,j] = (p1 + 2*p2)/(p0 + p1 + p2)
+				E[s,i] = (p1 + 2*p2)/(p0 + p1 + p2)
 
-# Update posterior expectations of the genotypes including cov diagonal (Fumagalli method)
+# Update posterior expectations (PCAngsd method)
 @boundscheck(False)
 @wraparound(False)
-cpdef covFumagalli(float[:,::1] L, float[::1] f, float[:,::1] E, float[::1] dCov, int t):
-	cdef int n = L.shape[0]//3
-	cdef int m = L.shape[1]
-	cdef int i, j
+cpdef updatePCAngsd(float[:,::1] L, float[:,::1] P, float[:,::1] E, int t):
+	cdef int m = L.shape[0]
+	cdef int n = L.shape[1]//3
+	cdef int i, s
+	cdef float p0, p1, p2
+	with nogil:
+		for s in prange(m, num_threads=t):
+			for i in range(n):
+				p0 = L[s,3*i+0]*(1 - P[s,i])*(1 - P[s,i])
+				p1 = L[s,3*i+1]*2*P[s,i]*(1 - P[s,i])
+				p2 = L[s,3*i+2]*P[s,i]*P[s,i]
+
+				# Update dosage
+				E[s,i] = (p1 + 2*p2)/(p0 + p1 + p2)
+
+# Update posterior expectations including cov diagonal (Fumagalli method)
+@boundscheck(False)
+@wraparound(False)
+cpdef covNormal(float[:,::1] L, float[::1] f, float[:,::1] E, float[::1] dCov, int t):
+	cdef int m = L.shape[0]
+	cdef int n = L.shape[1]//3
+	cdef int i, s
 	cdef float p0, p1, p2, pSum, temp
 	with nogil:
-		for i in prange(n, num_threads=t):
-			dCov[i] = 0.0
-			for j in range(m):
-				p0 = L[3*i,j]*(1 - f[j])*(1 - f[j])
-				p1 = L[3*i+1,j]*2*f[j]*(1 - f[j])
-				p2 = L[3*i+2,j]*f[j]*f[j]
+		for s in prange(m, num_threads=t):
+			for i in range(n):
+				p0 = L[s,3*i+0]*(1 - f[s])*(1 - f[s])
+				p1 = L[s,3*i+1]*2*f[s]*(1 - f[s])
+				p2 = L[s,3*i+2]*f[s]*f[s]
 				pSum = p0 + p1 + p2
 
 				# Update dosage and cov diagonal
-				E[i,j] = (p1 + 2*p2)/pSum
-				temp = (0 - 2*f[j])*(0 - 2*f[j])*(p0/pSum)
-				temp = temp + (1 - 2*f[j])*(1 - 2*f[j])*(p1/pSum)
-				temp = temp + (2 - 2*f[j])*(2 - 2*f[j])*(p2/pSum)
-				dCov[i] = dCov[i] + temp/(2*f[j]*(1 - f[j]))
-			dCov[i] = dCov[i]/m
+				E[s,i] = (p1 + 2*p2)/pSum
+				temp = (0 - 2*f[s])*(0 - 2*f[s])*(p0/pSum)
+				temp = temp + (1 - 2*f[s])*(1 - 2*f[s])*(p1/pSum)
+				temp = temp + (2 - 2*f[s])*(2 - 2*f[s])*(p2/pSum)
+				dCov[i] = dCov[i] + temp/(2*f[s]*(1 - f[s]))
 
-# Update posterior expectations of the genotypes including cov diagonal (PCAngsd method)
+# Update posterior expectations including cov diagonal (PCAngsd method)
 @boundscheck(False)
 @wraparound(False)
-cpdef covPCAngsd(float[:,::1] L, float[::1] f, float[:,::1] Pi, float[:,::1] E, float[::1] dCov, int t):
-	cdef int n = L.shape[0]//3
-	cdef int m = L.shape[1]
-	cdef int i, j
+cpdef covPCAngsd(float[:,::1] L, float[::1] f, float[:,::1] P, float[:,::1] E, float[::1] dCov, int t):
+	cdef int m = L.shape[0]
+	cdef int n = L.shape[1]//3
+	cdef int i, s
 	cdef float p0, p1, p2, pSum, temp
 	with nogil:
-		for i in prange(n, num_threads=t):
-			dCov[i] = 0.0
-			for j in range(m):
-				p0 = L[3*i,j]*(1 - Pi[i,j])*(1 - Pi[i,j])
-				p1 = L[3*i+1,j]*2*Pi[i,j]*(1 - Pi[i,j])
-				p2 = L[3*i+2,j]*Pi[i,j]*Pi[i,j]
+		for s in prange(m, num_threads=t):
+			for i in range(n):
+				p0 = L[s,3*i+0]*(1 - P[s,i])*(1 - P[s,i])
+				p1 = L[s,3*i+1]*2*P[s,i]*(1 - P[s,i])
+				p2 = L[s,3*i+2]*P[s,i]*P[s,i]
 				pSum = p0 + p1 + p2
 
 				# Update dosage and cov diagonal
-				E[i,j] = (p1 + 2*p2)/pSum
-				temp = (0 - 2*f[j])*(0 - 2*f[j])*(p0/pSum)
-				temp = temp + (1 - 2*f[j])*(1 - 2*f[j])*(p1/pSum)
-				temp = temp + (2 - 2*f[j])*(2 - 2*f[j])*(p2/pSum)
-				dCov[i] = dCov[i] + temp/(2*f[j]*(1 - f[j]))
-			dCov[i] = dCov[i]/m
+				E[s,i] = (p1 + 2*p2)/pSum
+				temp = (0 - 2*f[s])*(0 - 2*f[s])*(p0/pSum)
+				temp = temp + (1 - 2*f[s])*(1 - 2*f[s])*(p1/pSum)
+				temp = temp + (2 - 2*f[s])*(2 - 2*f[s])*(p2/pSum)
+				dCov[i] = dCov[i] + temp/(2*f[s]*(1 - f[s]))
 
-# Update posterior expectations of the genotypes including cov diagonal no standardization (PCAngsd method)
-@boundscheck(False)
-@wraparound(False)
-cpdef covPCAngsdNoStd(float[:,::1] L, float[::1] f, float[:,::1] Pi, float[:,::1] E, float[::1] dCov, int t):
-	cdef int n = L.shape[0]//3
-	cdef int m = L.shape[1]
-	cdef int i, j
-	cdef float p0, p1, p2, pSum, temp
-	with nogil:
-		for i in prange(n, num_threads=t):
-			dCov[i] = 0.0
-			for j in range(m):
-				p0 = L[3*i,j]*(1 - Pi[i,j])*(1 - Pi[i,j])
-				p1 = L[3*i+1,j]*2*Pi[i,j]*(1 - Pi[i,j])
-				p2 = L[3*i+2,j]*Pi[i,j]*Pi[i,j]
-				pSum = p0 + p1 + p2
-
-				# Update dosage and cov diagonal
-				E[i,j] = (p1 + 2*p2)/pSum
-				temp = (0 - 2*f[j])*(0 - 2*f[j])*(p0/pSum)
-				temp = temp + (1 - 2*f[j])*(1 - 2*f[j])*(p1/pSum)
-				temp = temp + (2 - 2*f[j])*(2 - 2*f[j])*(p2/pSum)
-				dCov[i] = dCov[i] + temp
-			dCov[i] = dCov[i]/m
-
-# Center posterior expectations of the genotype
+# Center posterior expectations
 @boundscheck(False)
 @wraparound(False)
 cpdef centerE(float[:,::1] E, float[::1] f, int t):
-	cdef int n = E.shape[0]
-	cdef int m = E.shape[1]
-	cdef int i, j
+	cdef int m = E.shape[0]
+	cdef int n = E.shape[1]
+	cdef int i, s
 	with nogil:
-		for i in prange(n, num_threads=t):
-			for j in range(m):
-				E[i,j] = E[i,j] - 2*f[j]
+		for s in prange(m, num_threads=t):
+			for i in range(n):
+				E[s,i] = E[s,i] - 2*f[s]
 
-# Standardize posterior expectations of the genotype
+# Standardize posterior expectations
 @boundscheck(False)
 @wraparound(False)
 cpdef standardizeE(float[:,::1] E, float[::1] f, int t):
-	cdef int n = E.shape[0]
-	cdef int m = E.shape[1]
-	cdef int i, j
+	cdef int m = E.shape[0]
+	cdef int n = E.shape[1]
+	cdef int i, s
 	with nogil:
-		for i in prange(n, num_threads=t):
-			for j in range(m):
-				E[i,j] = E[i,j] - 2*f[j]
-				E[i,j] = E[i,j]/sqrt(2*f[j]*(1 - f[j]))
+		for s in prange(m, num_threads=t):
+			for i in range(n):
+				E[s,i] = E[s,i] - 2*f[s]
+				E[s,i] = E[s,i]/sqrt(2*f[s]*(1 - f[s]))
 
 # Add intercept to reconstructed allele frequencies
 @boundscheck(False)
 @wraparound(False)
-cpdef updatePi(float[:,::1] Pi, float[::1] f, int t):
-	cdef int n = Pi.shape[0]
-	cdef int m = Pi.shape[1]
-	cdef int i, j
+cpdef updatePi(float[:,::1] P, float[::1] f, int t):
+	cdef int m = P.shape[0]
+	cdef int n = P.shape[1]
+	cdef int i, s
 	with nogil:
-		for i in prange(n, num_threads=t):
-			for j in range(m):
-				Pi[i,j] = Pi[i,j] + 2*f[j]
-				Pi[i,j] = Pi[i,j]/2
-				Pi[i,j] = min(max(Pi[i,j], 1e-4), 1-(1e-4))
-
-# RMSE with sign checking
-@boundscheck(False)
-@wraparound(False)
-cpdef rmse2d_eig(float[:,:] A, float[:,:] B):
-	cdef int n = A.shape[0]
-	cdef int m = A.shape[1]
-	cdef int i, j
-	cdef float res = 0.0
-	for i in range(n):
-		for j in range(m):
-			if (A[i,j] > 0) & (B[i,j] > 0):
-				res += (A[i,j] - B[i,j])*(A[i,j] - B[i,j])
-			elif (A[i,j] < 0) & (B[i,j] < 0):
-				res += (A[i,j] - B[i,j])*(A[i,j] - B[i,j])
-			else:
-				res += (A[i,j] + B[i,j])*(A[i,j] + B[i,j])
-	res /= (m*n)
-	return sqrt(res)
+		for s in prange(m, num_threads=t):
+			for i in range(n):
+				P[s,i] = P[s,i] + 2*f[s]
+				P[s,i] = P[s,i]/2
+				P[s,i] = min(max(P[s,i], 1e-4), 1-(1e-4))

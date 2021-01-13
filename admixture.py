@@ -1,208 +1,162 @@
 """
-Estimate admixture using Non-negative Matrix Factorization based on multiplicative updates.
+PCAngsd.
+Estimate admixture proportions and ancestral allele frequencies.
 """
 
 __author__ = "Jonas Meisner"
 
-# Import libraries
+# libraries
 import numpy as np
+from math import ceil
+
+# Import scripts
+import shared_cy
 import admixture_cy
-import shared
 
-# Estimate admixture using non-negative matrix factorization
-def admixNMF(L, Pi, K, alpha, admix_iter, admix_tole, seed, batch, verbose, t):
-	n, m = Pi.shape
+##### Admixture estimation #####
+def admixNMF(L, P, K, alpha, iter, tole, batch, seed, verbose, t):
+    m, n = P.shape
+    np.random.seed(seed)
+    shuffleP = np.random.permutation(m)
+    X = P[shuffleP,:] # Shuffled individual allele frequencies
 
-	# Shuffle individual allele frequencies
-	np.random.seed(seed) # Set random seed
-	shuffleX = np.random.permutation(m)
-	X = Pi[:, shuffleX]
+    # Initiate factor matrices and containers
+    Q = np.random.rand(n, K).astype(np.float32, copy=False)
+    Q /= np.sum(Q, axis=1, keepdims=True)
+    Q_A = np.zeros((n, K), dtype=np.float32)
+    Q_B = np.zeros((K, K), dtype=np.float32)
+    Q_C = np.zeros((n, K), dtype=np.float32)
+    F = np.random.rand(m, K).astype(np.float32, copy=False)
+    F_B = np.zeros((K, K), dtype=np.float32)
+    frob_vec = np.zeros(m, dtype=np.float32)
+    logl_vec = np.zeros(m, dtype=np.float32)
 
-	# Initiate factor matrices and containers
-	Q = np.random.rand(n, K).astype(np.float32, copy=False)
-	Q /= np.sum(Q, axis=1, keepdims=True)
-	prevQ = np.copy(Q)
-	F = np.random.rand(m, K).astype(np.float32, copy=False)
-	loglike_vec = np.zeros(m, dtype=np.float32)
+    # Batch preparation
+    batch_M = ceil(float(m)/batch)
+    bIndex = list(range(0, m, batch_M))
 
-	# Batch preparation
-	batch_M = int(np.ceil(float(m)/batch))
-	bIndex = np.arange(0, m, batch_M)
+    # CSG-MU - cyclic mini-batch stochastic gradient descent
+    for i in range(iter):
+        prevQ = np.copy(Q)
+        for b in bIndex:
+            bEnd = min(b + batch_M, m)
+            Xbatch = X[b:bEnd,:]
+            Fbatch = F[b:bEnd,:]
+            mInner = Fbatch.shape[0]
+            pF = 2*(1 + (n*mInner + n*K)//(mInner*K + mInner))
+            pQ = 2*(1 + (n*mInner + mInner*K)//(n*K + n))
 
-	# CSG-MU - Cyclic mini-batch stochastic gradient descent
-	for iteration in range(1, admix_iter+1):
-		for b in bIndex:
-			bEnd = min(b + batch_M, m)
-			Xbatch = X[:, b:bEnd]
-			Fbatch = F[b:bEnd]
-			mInner = Fbatch.shape[0]
-			pF = 2*(1 + (n*mInner + n*K)//(mInner*K + mInner))
-			pQ = 2*(1 + (n*mInner + mInner*K)//(n*K + n))
+            # Update F
+            F_A = np.dot(Xbatch, Q)
+            np.dot(Q.T, Q, out=F_B)
+            for inner in range(pF):
+                F_prev = np.copy(Fbatch)
+                F_C = np.dot(Fbatch, F_B)
+                admixture_cy.updateF(Fbatch, F_A, F_C)
+                if inner == 0:
+                    F_init = shared_cy.frobenius(Fbatch, F_prev)
+                else:
+                    if (shared_cy.frobenius(Fbatch, F_prev) <= (0.1*F_init)):
+                        break
 
-			# Update F
-			A = np.dot(Xbatch.T, Q)
-			B = np.dot(Q.T, Q)
-			for inner in range(pF): # Acceleration updates
-				F_prev = np.copy(Fbatch)
-				FB = np.dot(Fbatch, B)
-				admixture_cy.updateF(Fbatch, A, FB, t)
-				if inner == 0:
-					F_init = shared.frobenius(Fbatch, F_prev)
-				else:
-					if (shared.frobenius(Fbatch, F_prev) <= (0.1*F_init)):
-						break
+            # Update Q
+            np.dot(Xbatch.T, Fbatch, out=Q_A)
+            np.dot(Fbatch.T, Fbatch, out=Q_B)
+            for inner in range(pQ):
+                Q_prev = np.copy(Q)
+                np.dot(Q, Q_B, out=Q_C)
+                admixture_cy.updateQ(Q, Q_A, Q_C, alpha)
+                Q /= np.sum(Q, axis=1, keepdims=True)
+                if inner == 0:
+                    Q_init = shared_cy.frobenius(Q, Q_prev)
+                else:
+                    if (shared_cy.frobenius(Q, Q_prev) <= 0.1*Q_init):
+                        break
 
-			# Update Q
-			A = np.dot(Xbatch, Fbatch)
-			B = np.dot(Fbatch.T, Fbatch)
-			for inner in range(pQ): # Acceleration updates
-				Q_prev = np.copy(Q)
-				QB = np.dot(Q, B)
-				admixture_cy.updateQ(Q, A, QB, alpha, t)
-				Q /= np.sum(Q, axis=1, keepdims=True)
+        # Measure difference
+        diff = shared_cy.rmse2d(Q, prevQ)
+        if verbose:
+            print("CSG-MU (" + str(i+1) + "). RMSE=" + str(diff))
+        if diff < tole:
+            print("Converged.")
+            break
+    del X, Xbatch, Fbatch, Q_A, Q_B, Q_C, F_A, F_B, F_C, Q_prev, F_prev
 
-				if inner == 0:
-					Q_init = shared.frobenius(Q, Q_prev)
-				else:
-					if (shared.frobenius(Q, Q_prev) <= (0.1*Q_init)):
-						break
+    # Reshuffle columns of F
+    F = F[np.argsort(shuffleP)]
 
-		# Measure difference
-		diff = shared.rmse2d(Q, prevQ)
-		if verbose:
-			print("CSG-MU (" + str(iteration) + "). Q-RMSD=" + str(diff))
+    # Frobenius and log-likelihood
+    X = np.dot(F, Q.T)
+    shared_cy.frobeniusThread(X, P, frob_vec, t)
+    print("Frobenius error: " + str(np.sqrt(np.sum(frob_vec))))
+    admixture_cy.loglike(L, X, logl_vec, t)
+    loglike = np.sum(logl_vec)
+    print("Log-likelihood: " + str(loglike))
+    del logl_vec
+    return Q, F, loglike
 
-		if diff < admix_tole:
-			print("CSG-MU has converged.")
-			break
-		prevQ = np.copy(Q)
+##### Automatic search for alpha #####
+def alphaSearch(L, P, K, aEnd, iter, tole, batch, seed, depth, t):
+    # First search
+    aMin = 0
+    aMax = aEnd
+    aMid = (aMin + aMax)/2.0
+    aStep = (aMin + aMax)/4.0
+    print("Depth=1, Running Alpha=" + str(aMin))
+    QB, FB, lB = admixNMF(L, P, K, aMin, iter, tole, batch, seed, False, t)
+    aL = 0
+    aB = aMin
+    print("Depth=1, Running Alpha=" + str(aMid))
+    QT, FT, lT = admixNMF(L, P, K, aMid, iter, tole, batch, seed, False, t)
+    if lT > lB:
+        QB, FB, lB = np.copy(QT), np.copy(FT), lT
+        aL = 1
+        aB = aMid
+    print("Depth=1, Running Alpha=" + str(aMax))
+    QT, FT, lT = admixNMF(L, P, K, aMax, iter, tole, batch, seed, False, t)
+    if lT > lB:
+        QB, FB, lB = np.copy(QT), np.copy(FT), lT
+        aL = 2
+        aB = aMax
 
-	del X, Xbatch, prevQ, A, B, FB, QB, F_prev, Q_prev
-
-	# Reshuffle columns
-	F = F[np.argsort(shuffleX)]
-
-	# Frobenius and log-like
-	X = np.dot(Q, F.T)
-	admixture_cy.clipX(X, t)
-	cost = shared.frobenius(X, Pi)
-	print("Frobenius error: " + str(cost))
-
-	admixture_cy.loglike(L, X, loglike_vec, t)
-	logLike = np.sum(loglike_vec)
-	print("Log-likelihood: " + str(logLike))
-	return Q, F, logLike
-
-# Automatic search for appropriate alpha
-def alphaSearch(L, Pi, K, aEnd, admix_iter, admix_tole, seed, batch, depth, t):
-	# First search
-	aMin = 0
-	aMax = aEnd
-	aMid = (aMin + aMax)/2.0
-	aStep = (aMin + aMax)/4.0
-
-	print("NMF: K=" + str(K) + ", alpha=" + str(aMin))
-	Q_best, F_best, L_best = admixNMF(L, Pi, K, aMin, admix_iter, admix_tole, seed, batch, False, t)
-	argL = 0
-	aBest = aMin
-	print("NMF: K=" + str(K) + ", alpha=" + str(aMid))
-	Q_test, F_test, L_test = admixNMF(L, Pi, K, aMid, admix_iter, admix_tole, seed, batch, False, t)
-	if L_test > L_best:
-		Q_best, F_best, L_best = np.copy(Q_test), np.copy(F_test), L_test
-		argL = 1
-		aBest = aMid
-	print("NMF: K=" + str(K) + ", alpha=" + str(aMax))
-	Q_test, F_test, L_test = admixNMF(L, Pi, K, aMax, admix_iter, admix_tole, seed, batch, False, t)
-	if L_test > L_best:
-		Q_best, F_best, L_best = np.copy(Q_test), np.copy(F_test), L_test
-		argL = 2
-		aBest = aMax
-	
-	if argL == 0:
-		aMax = aMid
-		aMid = aMid/2.0
-	else:
-		aMid = [aMin, aMid, aMax][argL]
-		aMin = aMid - aStep
-		aMax = aMid + aStep
-
-	for d in range(2, depth+1):
-		print("\nDepth=" + str(d) + ", best alpha=" + str(aBest) + ", log-like=" + str(L_best))
-		if aMin == 0:
-			print("NMF: K=" + str(K) + ", alpha=" + str(aMid))
-			Q_test, F_test, L_test = admixNMF(L, Pi, K, aMid, admix_iter, admix_tole, seed, batch, False, t)
-			if L_test > L_best:
-				Q_best, F_best, L_best = np.copy(Q_test), np.copy(F_test), L_test
-				argL = 1
-				aBest = aMid
-		else:
-			print("NMF: K=" + str(K) + ", alpha=" + str(aMin))
-			Q_test, F_test, L_test = admixNMF(L, Pi, K, aMin, admix_iter, admix_tole, seed, batch, False, t)
-			if L_test > L_best:
-				Q_best, F_best, L_best = np.copy(Q_test), np.copy(F_test), L_test
-				argL = 0
-				aBest = aMin
-
-			else:
-				print("NMF: K=" + str(K) + ", alpha=" + str(aMax))
-				Q_test, F_test, L_test = admixNMF(L, Pi, K, aMax, admix_iter, admix_tole, seed, batch, False, t)
-				if L_test > L_best:
-					Q_best, F_best, L_best = np.copy(Q_test), np.copy(F_test), L_test
-					argL = 2
-					aBest = aMax
-				else:
-					argL = 1
-		aStep /= 2.0
-		if aMin == 0:
-			aMax = aMid
-			aMid = aMax/2.0
-		else:
-			aMid = [aMin, aMid, aMax][argL]
-			aMin = aMid - aStep
-			aMax = aMid + aStep
-	return Q_best, F_best, L_best, aBest
-
-# Admixture selection scan
-def admixFst(Q, F, t):
-	n, K = Q.shape
-	m = F.shape[0]
-
-	# Vector prep
-	Qk = np.sum(Q, axis=0)/float(n)
-	Fst = np.zeros(m, dtype=np.float32)
-
-	# Run scan
-	admixture_cy.admixFst(F, Qk, Fst, t)
-	return Fst
-
-# Admixture covariance matrix (K x K)
-def admixCovar(F, f, t):
-	m, K = F.shape
-
-	# Vector prep
-	Fnorm = np.zeros((m, K), dtype=np.float32)
-
-	# Estimate cov
-	admixture_cy.admixNorm(F, f, Fnorm, t)
-	return np.dot(Fnorm.T, Fnorm)/float(m)
-
-# Admixture selection scan
-def admixScan(Pi, f, Q, t):
-	n, m = Pi.shape
-	K = Q.shape[1]
-
-	# Prep
-	PiNorm = np.zeros((n, m), dtype=np.float32)
-	S = np.zeros((m, K), dtype=np.float32)
-	B = np.zeros((n, K), dtype=np.float32)
-	Qavg = np.sum(Q, axis=0)/float(n)
-
-	# Call functions
-	admixture_cy.centerQ(Q, Qavg, B, t) # Center "branch" matrix
-	admixture_cy.standardizePi(Pi, f, PiNorm, t) # Standardize IAF
-	C = np.dot(PiNorm, PiNorm.T)/m # IAF covariance mat
-	del PiNorm
-	for k in range(K):
-		bCb = np.dot(B[:,k], np.dot(C, B[:,k])) # dot(b.T, dot(C, b))
-		admixture_cy.estimateScan(Pi, B[:,k], f, bCb, S[:,k], t)
-	return S
+    # Prepare new step
+    if aL == 0:
+        aMax = aMid
+        aMid = aMid/2.0
+    else:
+        aMid = [aMin, aMid, aMax][aL]
+        aMin = aMid - aStep
+        aMax = aMid + aStep
+    for d in range(depth-1):
+        if aMin == 0:
+            print("Depth=" + str(d+2) + ", Running Alpha=" + str(aMid))
+            QT, FT, lT = admixNMF(L, P, K, aMid, iter, tole, batch, seed, False, t)
+            if lT > lB:
+                QB, FB, lB = np.copy(QT), np.copy(FT), lT
+                aL = 1
+                aB = aMid
+        else:
+            print("Depth=" + str(d+2) + ", Running Alpha=" + str(aMin))
+            QT, FT, lT = admixNMF(L, P, K, aMin, iter, tole, batch, seed, False, t)
+            if lT > lB:
+                QB, FB, lB = np.copy(QT), np.copy(FT), lT
+                aL = 0
+                aB = aMin
+            else:
+                print("Depth=" + str(d+2) + ", Running Alpha=" + str(aMax))
+                QT, FT, lT = admixNMF(L, P, K, aMax, iter, tole, batch, seed, False, t)
+                if lT > lB:
+                    QB, FB, lB = np.copy(QT), np.copy(FT), lT
+                    aL = 2
+                    aB = aMax
+                else:
+                    argL = 1
+        aStep /= 2.0
+        if aMin == 0:
+            aMax = aMid
+            aMid = aMax/2.0
+        else:
+            aMid = [aMin, aMid, aMax][aL]
+            aMin = aMid - aStep
+            aMax = aMid + aStep
+    return QB, FB, lB, aB
