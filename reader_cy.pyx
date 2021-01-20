@@ -58,7 +58,7 @@ cpdef np.ndarray[DTYPE_t, ndim=2] readBeagle(str beagle):
 cpdef np.ndarray[DTYPE_t, ndim=2] readBeagleFilter(str beagle, \
                                                     unsigned char[::1] F, int N):
     cdef int c = 0
-    cdef int i, iN, m, n, s
+    cdef int i, m, n, s
     cdef bytes line_bytes
     cdef str line_str
     cdef char* line
@@ -95,7 +95,7 @@ cpdef np.ndarray[DTYPE_t, ndim=2] readBeagleFilter(str beagle, \
     cdef float *L_ptr
     for s in range(m):
         L_ptr = &L[s][0]
-        L_np[s] = np.asarray(<float[:n]> L_ptr)
+        L_np[s] = np.asarray(<float[:N]> L_ptr)
     return L_np
 
 # Convert PLINK bed format to Beagle format
