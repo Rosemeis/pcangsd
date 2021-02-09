@@ -21,11 +21,10 @@ def signFlip(U, Vt):
     return U, Vt
 
 # Estimate individual allele frequencies
-def estimatePi(E, K, P, f, t):
+def estimatePi(E, K, P, f):
     U, s, Vt = svds(E, k=K)
     U, Vt = signFlip(U, Vt)
     np.dot(U, s.reshape(-1,1)*Vt, out=P)
-    covariance_cy.updatePi(P, f, t)
     return P, Vt
 
 ### PCAngsd iterations ###
@@ -39,16 +38,16 @@ def emPCA(L, f, e, iter, tole, t):
     dCov = np.zeros(n, dtype=np.float32)
 
     # Estimate covariance matrix (Fumagalli) and infer number of PCs
-    if e == 0:
+    if (e == 0) or (iter == 0):
         # Prepare dosages and diagonal
         covariance_cy.covNormal(L, f, E, dCov, t)
-        covariance_cy.standardizeE(E, f, t)
         C = np.dot(E.T, E)/float(m)
-        np.fill_diagonal(C, dCov/float(m))
+        covariance_cy.diagonalNormal(L, f, E, dCov, t)
+        np.fill_diagonal(C, dCov)
 
         if iter == 0:
             print("Returning with ngsTools covariance matrix!")
-            return C
+            return C, None, None
 
         # Velicer's Minimum Average Partial (MAP) Test
         eVal, eVec = eigsh(C, k=min(n-1, 15)) # Eigendecomposition (Symmetric)
@@ -79,30 +78,28 @@ def emPCA(L, f, e, iter, tole, t):
 
     # Estimate individual allele frequencies
     covariance_cy.updateNormal(L, f, E, t)
-    covariance_cy.centerE(E, f, t)
-    P, Vt = estimatePi(E, K, P, f, t)
+    P, Vt = estimatePi(E, K, P, f)
     print("Individual allele frequencies estimated (1).")
 
     # Iterative estimation
     for i in range(iter):
         prevV = np.copy(Vt)
-        covariance_cy.updatePCAngsd(L, P, E, t)
-        covariance_cy.centerE(E, f, t)
-        P, Vt = estimatePi(E, K, P, f, t)
+        covariance_cy.updatePCAngsd(L, f, P, E, t)
+        P, Vt = estimatePi(E, K, P, f)
         # Check for convergence
         diff = shared_cy.rmse2d(Vt, prevV)
         print("Individual allele frequencies estimated (" + \
                 str(i+2) + "). RMSE=" + str(diff))
         if diff < tole:
-            print("Converged.")
+            print("PCAngsd converged.")
             break
     del Vt, prevV
 
     # Estimate final covariance matrix
-    dCov.fill(0.0)
-    covariance_cy.covPCAngsd(L, f, P, E, dCov, t)
-    covariance_cy.standardizeE(E, f, t)
+    covariance_cy.covPCAngsd(L, f, P, E, t)
     C = np.dot(E.T, E)/float(m)
-    np.fill_diagonal(C, dCov/float(m))
+    dCov.fill(0.0)
+    covariance_cy.diagonalPCAngsd(L, f, P, E, dCov, t)
+    np.fill_diagonal(C, dCov)
     del E, dCov # Release memory
     return C, P, K

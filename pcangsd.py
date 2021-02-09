@@ -8,7 +8,7 @@ __author__ = "Jonas Meisner"
 # Argparse
 import argparse
 parser = argparse.ArgumentParser(prog="PCAngsd")
-parser.add_argument("--version", action="version", version="%(prog)s 1.0")
+parser.add_argument("--version", action="version", version="%(prog)s 1.01")
 parser.add_argument("-beagle", metavar="FILE",
 	help="Filepath to genotype likelihoods in gzipped Beagle format from ANGSD")
 parser.add_argument("-filter", metavar="FILE",
@@ -99,6 +99,7 @@ assert (args.beagle is not None) or (args.plink is not None), \
 
 # Libraries
 import os
+import sys
 import subprocess
 from datetime import datetime
 
@@ -143,7 +144,7 @@ import admixture
 import tree
 
 ##### PCAngsd #####
-print("PCAngsd v.1.0")
+print("PCAngsd v.1.01")
 print("Using " + str(args.threads) + " thread(s).\n")
 
 # Parse data
@@ -229,6 +230,10 @@ if args.pi is None:
 	np.savetxt(args.out + ".cov", C)
 	print("Saved covariance matrix as " + str(args.out) + ".cov (Text).\n")
 	del C
+
+	# Exit for standard PCA
+	if args.iter == 0:
+		sys.exit(0)
 else:
 	assert args.e != 0, "Must specify number of eigenvectors used!"
 	print("Loading pre-estimated frequency matrix.\n")
@@ -396,7 +401,7 @@ if args.maf_save:
 if args.dosage_save:
 	import covariance_cy
 	E = np.zeros(P.shape, dtype=np.float32) # Dosage matrix
-	covariance_cy.updatePCAngsd(L, P, E, args.threads)
+	covariance_cy.updateDosages(L, P, E, args.threads)
 	np.save(args.out + ".dosage", E)
 	print("Saved genotype dosages as " + str(args.out) + \
 			".dosage.npy (Binary - np.float32)\n")

@@ -19,8 +19,7 @@ def galinskyScan(L, P, f, K, t):
     m, n = P.shape
     E = np.zeros((m, n), dtype=np.float32)
     D = np.zeros((m, K), dtype=np.float32)
-    covariance_cy.updatePCAngsd(L, P, E, t)
-    covariance_cy.standardizeE(E, f, t)
+    covariance_cy.updateSelection(L, f, P, E, t)
 
     # Perform SVD on standardized posterior expectations
     U, _, _ = svds(E, k=K)
@@ -34,8 +33,7 @@ def pcadaptScan(L, P, f, K, t):
     m, n = P.shape
     E = np.zeros((m, n), dtype=np.float32)
     Z = np.zeros((m, K), dtype=np.float32)
-    covariance_cy.updatePCAngsd(L, P, E, t)
-    covariance_cy.standardizeE(E, f, t)
+    covariance_cy.updateSelection(L, f, P, E, t)
 
     # Perform SVD on standardized posterior expectations
     U, s, Vt = svds(E, k=K)
@@ -48,8 +46,7 @@ def pcadaptScan(L, P, f, K, t):
 def snpWeights(L, P, f, K, t):
     m, n = P.shape
     E = np.zeros((m, n), dtype=np.float32)
-    covariance_cy.updatePCAngsd(L, P, E, t)
-    covariance_cy.standardizeE(E, f, t)
+    covariance_cy.updateSelection(L, f, P, E, t)
 
     # Perform SVD on standardized posterior expectations
     U, s, _ = svds(E, k=K)

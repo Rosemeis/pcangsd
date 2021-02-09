@@ -16,17 +16,16 @@ cpdef updateNormal(float[:,::1] L, float[::1] f, float[:,::1] E, int t):
 	with nogil:
 		for s in prange(m, num_threads=t):
 			for i in range(n):
+				# Update dosage
 				p0 = L[s,3*i+0]*(1 - f[s])*(1 - f[s])
 				p1 = L[s,3*i+1]*2*f[s]*(1 - f[s])
 				p2 = L[s,3*i+2]*f[s]*f[s]
-
-				# Update dosage
-				E[s,i] = (p1 + 2*p2)/(p0 + p1 + p2)
+				E[s,i] = (p1 + 2*p2)/(p0 + p1 + p2) - 2*f[s]
 
 # Update posterior expectations (PCAngsd method)
 @boundscheck(False)
 @wraparound(False)
-cpdef updatePCAngsd(float[:,::1] L, float[:,::1] P, float[:,::1] E, int t):
+cpdef updatePCAngsd(float[:,::1] L, float[::1] f, float[:,::1] P, float[:,::1] E, int t):
 	cdef int m = L.shape[0]
 	cdef int n = L.shape[1]//3
 	cdef int i, s
@@ -34,94 +33,144 @@ cpdef updatePCAngsd(float[:,::1] L, float[:,::1] P, float[:,::1] E, int t):
 	with nogil:
 		for s in prange(m, num_threads=t):
 			for i in range(n):
+				# Update individual allele frequency
+				P[s,i] = P[s,i] + 2*f[s]
+				P[s,i] = P[s,i]/2
+				P[s,i] = min(max(P[s,i], 1e-4), 1-(1e-4))
+
+				# Center dosage
 				p0 = L[s,3*i+0]*(1 - P[s,i])*(1 - P[s,i])
 				p1 = L[s,3*i+1]*2*P[s,i]*(1 - P[s,i])
 				p2 = L[s,3*i+2]*P[s,i]*P[s,i]
+				E[s,i] = (p1 + 2*p2)/(p0 + p1 + p2) - 2*f[s]
 
-				# Update dosage
-				E[s,i] = (p1 + 2*p2)/(p0 + p1 + p2)
-
-# Update posterior expectations including cov diagonal (Fumagalli method)
+# Standardize posterior expectations (Fumagalli method)
 @boundscheck(False)
 @wraparound(False)
-cpdef covNormal(float[:,::1] L, float[::1] f, float[:,::1] E, float[::1] dCov, int t):
+cpdef covNormal(float[:,::1] L, float[::1] f, float[:,::1] E, float[::1] dCov, \
+				int t):
+	cdef int m = L.shape[0]
+	cdef int n = L.shape[1]//3
+	cdef int i, s
+	cdef float p0, p1, p2
+	with nogil:
+		for s in prange(m, num_threads=t):
+			for i in range(n):
+				# Standardize dosage
+				p0 = L[s,3*i+0]*(1 - f[s])*(1 - f[s])
+				p1 = L[s,3*i+1]*2*f[s]*(1 - f[s])
+				p2 = L[s,3*i+2]*f[s]*f[s]
+				E[s,i] = (p1 + 2*p2)/(p0 + p1 + p2) - 2*f[s]
+				E[s,i] = E[s,i]/sqrt(2*f[s]*(1 - f[s]))
+
+# Standardize posterior expectations (PCAngsd method)
+@boundscheck(False)
+@wraparound(False)
+cpdef covPCAngsd(float[:,::1] L, float[::1] f, float[:,::1] P, float[:,::1] E, \
+					int t):
+	cdef int m = L.shape[0]
+	cdef int n = L.shape[1]//3
+	cdef int i, s
+	cdef float p0, p1, p2
+	with nogil:
+		for s in prange(m, num_threads=t):
+			for i in range(n):
+				# Update individual allele frequency
+				P[s,i] = P[s,i] + 2*f[s]
+				P[s,i] = P[s,i]/2
+				P[s,i] = min(max(P[s,i], 1e-4), 1-(1e-4))
+
+				# Standardize dosage
+				p0 = L[s,3*i+0]*(1 - P[s,i])*(1 - P[s,i])
+				p1 = L[s,3*i+1]*2*P[s,i]*(1 - P[s,i])
+				p2 = L[s,3*i+2]*P[s,i]*P[s,i]
+				E[s,i] = (p1 + 2*p2)/(p0 + p1 + p2) - 2*f[s]
+				E[s,i] = E[s,i]/sqrt(2*f[s]*(1 - f[s]))
+
+# Update covariance diagonal (Fumagalli method)
+@boundscheck(False)
+@wraparound(False)
+cpdef diagonalNormal(float[:,::1] L, float[::1] f, float[:,::1] E, \
+						float[::1] dCov, int t):
 	cdef int m = L.shape[0]
 	cdef int n = L.shape[1]//3
 	cdef int i, s
 	cdef float p0, p1, p2, pSum, temp
 	with nogil:
-		for s in prange(m, num_threads=t):
-			for i in range(n):
+		for i in prange(n, num_threads=t):
+			temp = 0.0
+			for s in range(m):
+				# Update probabilities
 				p0 = L[s,3*i+0]*(1 - f[s])*(1 - f[s])
 				p1 = L[s,3*i+1]*2*f[s]*(1 - f[s])
 				p2 = L[s,3*i+2]*f[s]*f[s]
 				pSum = p0 + p1 + p2
 
-				# Update dosage and cov diagonal
-				E[s,i] = (p1 + 2*p2)/pSum
+				# Aggregate diagonal
 				temp = (0 - 2*f[s])*(0 - 2*f[s])*(p0/pSum)
 				temp = temp + (1 - 2*f[s])*(1 - 2*f[s])*(p1/pSum)
 				temp = temp + (2 - 2*f[s])*(2 - 2*f[s])*(p2/pSum)
 				dCov[i] = dCov[i] + temp/(2*f[s]*(1 - f[s]))
+			dCov[i] = dCov[i]/float(m)
 
-# Update posterior expectations including cov diagonal (PCAngsd method)
+# Update covariance diagonal (PCAngsd method)
 @boundscheck(False)
 @wraparound(False)
-cpdef covPCAngsd(float[:,::1] L, float[::1] f, float[:,::1] P, float[:,::1] E, float[::1] dCov, int t):
+cpdef diagonalPCAngsd(float[:,::1] L, float[::1] f, float[:,::1] P, \
+						float[:,::1] E, float[::1] dCov, int t):
 	cdef int m = L.shape[0]
 	cdef int n = L.shape[1]//3
 	cdef int i, s
 	cdef float p0, p1, p2, pSum, temp
 	with nogil:
-		for s in prange(m, num_threads=t):
-			for i in range(n):
+		for i in prange(n, num_threads=t):
+			temp = 0.0
+			for s in range(m):
+				# Update probabilities
 				p0 = L[s,3*i+0]*(1 - P[s,i])*(1 - P[s,i])
 				p1 = L[s,3*i+1]*2*P[s,i]*(1 - P[s,i])
 				p2 = L[s,3*i+2]*P[s,i]*P[s,i]
 				pSum = p0 + p1 + p2
 
-				# Update dosage and cov diagonal
-				E[s,i] = (p1 + 2*p2)/pSum
+				# Aggregate diagonal
 				temp = (0 - 2*f[s])*(0 - 2*f[s])*(p0/pSum)
 				temp = temp + (1 - 2*f[s])*(1 - 2*f[s])*(p1/pSum)
 				temp = temp + (2 - 2*f[s])*(2 - 2*f[s])*(p2/pSum)
 				dCov[i] = dCov[i] + temp/(2*f[s]*(1 - f[s]))
+			dCov[i] = dCov[i]/float(m)
 
-# Center posterior expectations
+# Standardize posterior expectations for selection
 @boundscheck(False)
 @wraparound(False)
-cpdef centerE(float[:,::1] E, float[::1] f, int t):
-	cdef int m = E.shape[0]
-	cdef int n = E.shape[1]
+cpdef updateSelection(float[:,::1] L, float[::1] f, float[:,::1] P, \
+						float[:,::1] E, int t):
+	cdef int m = L.shape[0]
+	cdef int n = L.shape[1]//3
 	cdef int i, s
+	cdef float p0, p1, p2
 	with nogil:
 		for s in prange(m, num_threads=t):
 			for i in range(n):
-				E[s,i] = E[s,i] - 2*f[s]
-
-# Standardize posterior expectations
-@boundscheck(False)
-@wraparound(False)
-cpdef standardizeE(float[:,::1] E, float[::1] f, int t):
-	cdef int m = E.shape[0]
-	cdef int n = E.shape[1]
-	cdef int i, s
-	with nogil:
-		for s in prange(m, num_threads=t):
-			for i in range(n):
-				E[s,i] = E[s,i] - 2*f[s]
+				# Standardize dosage
+				p0 = L[s,3*i+0]*(1 - P[s,i])*(1 - P[s,i])
+				p1 = L[s,3*i+1]*2*P[s,i]*(1 - P[s,i])
+				p2 = L[s,3*i+2]*P[s,i]*P[s,i]
+				E[s,i] = (p1 + 2*p2)/(p0 + p1 + p2) - 2*f[s]
 				E[s,i] = E[s,i]/sqrt(2*f[s]*(1 - f[s]))
 
-# Add intercept to reconstructed allele frequencies
+# Update dosages for saving
 @boundscheck(False)
 @wraparound(False)
-cpdef updatePi(float[:,::1] P, float[::1] f, int t):
-	cdef int m = P.shape[0]
-	cdef int n = P.shape[1]
+cpdef updateDosages(float[:,::1] L, float[:,::1] P, float[:,::1] E, int t):
+	cdef int m = L.shape[0]
+	cdef int n = L.shape[1]//3
 	cdef int i, s
+	cdef float p0, p1, p2
 	with nogil:
 		for s in prange(m, num_threads=t):
 			for i in range(n):
-				P[s,i] = P[s,i] + 2*f[s]
-				P[s,i] = P[s,i]/2
-				P[s,i] = min(max(P[s,i], 1e-4), 1-(1e-4))
+				# Update dosage
+				p0 = L[s,3*i+0]*(1 - P[s,i])*(1 - P[s,i])
+				p1 = L[s,3*i+1]*2*P[s,i]*(1 - P[s,i])
+				p2 = L[s,3*i+2]*P[s,i]*P[s,i]
+				E[s,i] = (p1 + 2*p2)/(p0 + p1 + p2)
