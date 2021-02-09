@@ -52,7 +52,7 @@ cpdef covNormal(float[:,::1] L, float[::1] f, float[:,::1] E, float[::1] dCov, \
 	cdef int m = L.shape[0]
 	cdef int n = L.shape[1]//3
 	cdef int i, s
-	cdef float p0, p1, p2
+	cdef float p0, p1, p2, pSum, temp
 	with nogil:
 		for s in prange(m, num_threads=t):
 			for i in range(n):
@@ -60,18 +60,25 @@ cpdef covNormal(float[:,::1] L, float[::1] f, float[:,::1] E, float[::1] dCov, \
 				p0 = L[s,3*i+0]*(1 - f[s])*(1 - f[s])
 				p1 = L[s,3*i+1]*2*f[s]*(1 - f[s])
 				p2 = L[s,3*i+2]*f[s]*f[s]
-				E[s,i] = (p1 + 2*p2)/(p0 + p1 + p2) - 2*f[s]
+				pSum = p0 + p1 + p2
+				E[s,i] = (p1 + 2*p2)/pSum - 2*f[s]
 				E[s,i] = E[s,i]/sqrt(2*f[s]*(1 - f[s]))
+
+				# Estimate diagonal
+				temp = (0 - 2*f[s])*(0 - 2*f[s])*(p0/pSum)
+				temp = temp + (1 - 2*f[s])*(1 - 2*f[s])*(p1/pSum)
+				temp = temp + (2 - 2*f[s])*(2 - 2*f[s])*(p2/pSum)
+				dCov[i] = dCov[i] + temp/(2*f[s]*(1 - f[s]))
 
 # Standardize posterior expectations (PCAngsd method)
 @boundscheck(False)
 @wraparound(False)
 cpdef covPCAngsd(float[:,::1] L, float[::1] f, float[:,::1] P, float[:,::1] E, \
-					int t):
+					float[::1] dCov, int t):
 	cdef int m = L.shape[0]
 	cdef int n = L.shape[1]//3
 	cdef int i, s
-	cdef float p0, p1, p2
+	cdef float p0, p1, p2, pSum, temp
 	with nogil:
 		for s in prange(m, num_threads=t):
 			for i in range(n):
@@ -84,60 +91,15 @@ cpdef covPCAngsd(float[:,::1] L, float[::1] f, float[:,::1] P, float[:,::1] E, \
 				p0 = L[s,3*i+0]*(1 - P[s,i])*(1 - P[s,i])
 				p1 = L[s,3*i+1]*2*P[s,i]*(1 - P[s,i])
 				p2 = L[s,3*i+2]*P[s,i]*P[s,i]
-				E[s,i] = (p1 + 2*p2)/(p0 + p1 + p2) - 2*f[s]
+				pSum = p0 + p1 + p2
+				E[s,i] = (p1 + 2*p2)/pSum - 2*f[s]
 				E[s,i] = E[s,i]/sqrt(2*f[s]*(1 - f[s]))
 
-# Update covariance diagonal (Fumagalli method)
-@boundscheck(False)
-@wraparound(False)
-cpdef diagonalNormal(float[:,::1] L, float[::1] f, float[:,::1] E, \
-						float[::1] dCov, int t):
-	cdef int m = L.shape[0]
-	cdef int n = L.shape[1]//3
-	cdef int i, s
-	cdef float p0, p1, p2, pSum, temp
-	with nogil:
-		for i in prange(n, num_threads=t):
-			temp = 0.0
-			for s in range(m):
-				# Update probabilities
-				p0 = L[s,3*i+0]*(1 - f[s])*(1 - f[s])
-				p1 = L[s,3*i+1]*2*f[s]*(1 - f[s])
-				p2 = L[s,3*i+2]*f[s]*f[s]
-				pSum = p0 + p1 + p2
-
-				# Aggregate diagonal
+				# Estimate diagonal
 				temp = (0 - 2*f[s])*(0 - 2*f[s])*(p0/pSum)
 				temp = temp + (1 - 2*f[s])*(1 - 2*f[s])*(p1/pSum)
 				temp = temp + (2 - 2*f[s])*(2 - 2*f[s])*(p2/pSum)
 				dCov[i] = dCov[i] + temp/(2*f[s]*(1 - f[s]))
-			dCov[i] = dCov[i]/float(m)
-
-# Update covariance diagonal (PCAngsd method)
-@boundscheck(False)
-@wraparound(False)
-cpdef diagonalPCAngsd(float[:,::1] L, float[::1] f, float[:,::1] P, \
-						float[:,::1] E, float[::1] dCov, int t):
-	cdef int m = L.shape[0]
-	cdef int n = L.shape[1]//3
-	cdef int i, s
-	cdef float p0, p1, p2, pSum, temp
-	with nogil:
-		for i in prange(n, num_threads=t):
-			temp = 0.0
-			for s in range(m):
-				# Update probabilities
-				p0 = L[s,3*i+0]*(1 - P[s,i])*(1 - P[s,i])
-				p1 = L[s,3*i+1]*2*P[s,i]*(1 - P[s,i])
-				p2 = L[s,3*i+2]*P[s,i]*P[s,i]
-				pSum = p0 + p1 + p2
-
-				# Aggregate diagonal
-				temp = (0 - 2*f[s])*(0 - 2*f[s])*(p0/pSum)
-				temp = temp + (1 - 2*f[s])*(1 - 2*f[s])*(p1/pSum)
-				temp = temp + (2 - 2*f[s])*(2 - 2*f[s])*(p2/pSum)
-				dCov[i] = dCov[i] + temp/(2*f[s]*(1 - f[s]))
-			dCov[i] = dCov[i]/float(m)
 
 # Standardize posterior expectations for selection
 @boundscheck(False)

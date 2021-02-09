@@ -42,8 +42,7 @@ def emPCA(L, f, e, iter, tole, t):
         # Prepare dosages and diagonal
         covariance_cy.covNormal(L, f, E, dCov, t)
         C = np.dot(E.T, E)/float(m)
-        covariance_cy.diagonalNormal(L, f, E, dCov, t)
-        np.fill_diagonal(C, dCov)
+        np.fill_diagonal(C, dCov/float(m))
 
         if iter == 0:
             print("Returning with ngsTools covariance matrix!")
@@ -96,10 +95,9 @@ def emPCA(L, f, e, iter, tole, t):
     del Vt, prevV
 
     # Estimate final covariance matrix
-    covariance_cy.covPCAngsd(L, f, P, E, t)
-    C = np.dot(E.T, E)/float(m)
     dCov.fill(0.0)
-    covariance_cy.diagonalPCAngsd(L, f, P, E, dCov, t)
-    np.fill_diagonal(C, dCov)
+    covariance_cy.covPCAngsd(L, f, P, E, dCov, t)
+    C = np.dot(E.T, E)/float(m)
+    np.fill_diagonal(C, dCov/float(m))
     del E, dCov # Release memory
     return C, P, K
