@@ -193,10 +193,9 @@ if args.minMaf > 0.0:
 	# Update arrays
 	m = np.sum(maskMAF)
 	tmpMask = maskMAF.astype(np.uint8)
-	reader_cy.filterVec(f, tmpMask)
-	f = f[:m]
-	reader_cy.filterMat(L, tmpMask)
+	reader_cy.filterArrays(L, f, tmpMask)
 	L = L[:m,:]
+	f = f[:m]
 	del tmpMask
 	print("Number of sites after MAF filtering (" + str(args.minMaf) + "): " \
             + str(m))

@@ -135,22 +135,10 @@ cpdef convertBed(float[:,::1] L, unsigned char[:,::1] G, int G_len, float e, \
                     if i == n:
                         break
 
-# 1D array filtering
+# Array filtering
 @boundscheck(False)
 @wraparound(False)
-cpdef filterVec(float[::1] f, unsigned char[::1] mask):
-    cdef int m = f.shape[0]
-    cdef int c = 0
-    cdef int s
-    for s in range(m):
-        if mask[s] == 1:
-            f[c] = f[s]
-            c += 1
-
-# 2D array filtering
-@boundscheck(False)
-@wraparound(False)
-cpdef filterMat(float[:,::1] L, unsigned char[::1] mask):
+cpdef filterArrays(float[:,::1] L, float[::1] f, unsigned char[::1] mask):
     cdef int m = L.shape[0]
     cdef int n = L.shape[1]
     cdef int c = 0
@@ -158,5 +146,6 @@ cpdef filterMat(float[:,::1] L, unsigned char[::1] mask):
     for s in range(m):
         if mask[s] == 1:
             for i in range(n):
-                L[c,i] = L[s,i]
+                L[c,i] = L[s,i] # Genotype likelihoods
+            f[c] = f[s] # Allele frequency
             c += 1
