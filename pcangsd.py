@@ -211,10 +211,9 @@ if args.hwe is not None:
 	# Update arrays
 	m = np.sum(maskHWE)
 	tmpMask = maskHWE.astype(np.uint8)
-	reader_cy.filterVec(f, tmpMask)
-	f = f[:m]
-	reader_cy.filterMat(L, tmpMask)
+	reader_cy.filterArrays(L, f, tmpMask)
 	L = L[:m,:]
+	f = f[:m]
 	del tmpMask
 	print("Number of sites after HWE filtering (" + str(args.hwe_tole) + "): " \
 			+ str(np.sum(maskHWE)))
