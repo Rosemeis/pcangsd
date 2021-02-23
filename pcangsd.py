@@ -267,7 +267,7 @@ if args.snp_weights:
 
 # pcadapt scan
 if args.pcadapt:
-	print("Performing seletion scan (pcadapt) using " + str(s_K) + " PCs.")
+	print("Performing selection scan (pcadapt) using " + str(s_K) + " PCs.")
 	Zscores = selection.pcadaptScan(L, P, f, s_K, args.threads)
 
 	# Save test statistics
