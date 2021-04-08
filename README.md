@@ -40,7 +40,7 @@ python pcangsd.py -h
 python pcangsd.py -beagle input.beagle.gz -out output -threads 64
 
 # PLINK files (using file-prefix, *.bed, *.bim, *.fam)
-python pcangsd.py -beagle input.plink -out output -threads 64
+python pcangsd.py -plink input.plink -out output -threads 64
 ```
 
 PCAngsd will mostly output files in binary Numpy format (.npy) with a few exceptions. In order to read files in python:
