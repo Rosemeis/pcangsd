@@ -31,7 +31,7 @@ cpdef np.ndarray[DTYPE_t, ndim=2] readBeagle(str beagle):
         while token != NULL:
             token = strtok(NULL, delims)
             c += 1
-        n = (c - 3)
+        n = c - 3
 
         # Add lines to vector
         for line_str in f:
@@ -41,15 +41,18 @@ cpdef np.ndarray[DTYPE_t, ndim=2] readBeagle(str beagle):
             token = strtok(NULL, delims)
             token = strtok(NULL, delims)
             for i in range(n):
-                L_ind.push_back(atof(strtok(NULL, delims)))
+                if (i + 1) % 3 == 0:
+                    token = strtok(NULL, delims)
+                else:
+                    L_ind.push_back(atof(strtok(NULL, delims)))
             L.push_back(L_ind)
             L_ind.clear()
     m = L.size() # Number of sites
-    cdef np.ndarray[DTYPE_t, ndim=2] L_np = np.empty((m, n), dtype=DTYPE)
+    cdef np.ndarray[DTYPE_t, ndim=2] L_np = np.empty((m, n//3*2), dtype=DTYPE)
     cdef float *L_ptr
     for s in range(m):
         L_ptr = &L[s][0]
-        L_np[s] = np.asarray(<float[:n]> L_ptr)
+        L_np[s] = np.asarray(<float[:(n//3*2)]> L_ptr)
     return L_np
 
 # Read Beagle text format and filtering individuals
@@ -74,7 +77,7 @@ cpdef np.ndarray[DTYPE_t, ndim=2] readBeagleFilter(str beagle, \
         while token != NULL:
             token = strtok(NULL, delims)
             c += 1
-        n = (c - 3)
+        n = c - 3
 
         # Add lines to vector
         for line_str in f:
@@ -84,18 +87,18 @@ cpdef np.ndarray[DTYPE_t, ndim=2] readBeagleFilter(str beagle, \
             token = strtok(NULL, delims)
             token = strtok(NULL, delims)
             for i in range(n):
-                if F[i] == 1:
+                if (F[i] == 1) or ((i + 1) % 3 != 0):
                     L_ind.push_back(atof(strtok(NULL, delims)))
                 else:
                     token = strtok(NULL, delims)
             L.push_back(L_ind)
             L_ind.clear()
     m = L.size() # Number of sites
-    cdef np.ndarray[DTYPE_t, ndim=2] L_np = np.empty((m, N), dtype=DTYPE)
+    cdef np.ndarray[DTYPE_t, ndim=2] L_np = np.empty((m, N//3*2), dtype=DTYPE)
     cdef float *L_ptr
     for s in range(m):
         L_ptr = &L[s][0]
-        L_np[s] = np.asarray(<float[:N]> L_ptr)
+        L_np[s] = np.asarray(<float[:(N//3*2)]> L_ptr)
     return L_np
 
 # Convert PLINK bed format to Beagle format
@@ -117,19 +120,15 @@ cpdef convertBed(float[:,::1] L, unsigned char[:,::1] G, int G_len, float e, \
                     if code == 0:
                         L[s,3*i+0] = e*e
                         L[s,3*i+1] = 2*e*(1 - e)
-                        L[s,3*i+2] = (1 - e)*(1 - e)
                     elif code == 1:
                         L[s,3*i+0] = (1 - e)*e
                         L[s,3*i+1] = (1 - e)*(1 - e) + e*e
-                        L[s,3*i+2] = (1 - e)*e
                     elif code == 2:
                         L[s,3*i+0] = (1 - e)*(1 - e)
                         L[s,3*i+1] = 2*e*(1 - e)
-                        L[s,3*i+2] = e*e
                     else:
                         L[s,3*i+0] = 0.333333
                         L[s,3*i+1] = 0.333333
-                        L[s,3*i+2] = 0.333333
                     byte = byte >> 2
                     i = i + 1
                     if i == n:

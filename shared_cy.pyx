@@ -10,16 +10,16 @@ from libc.math cimport sqrt
 @wraparound(False)
 cpdef emMAF_update(float[:,::1] L, float[::1] f, int t):
     cdef int m = L.shape[0]
-    cdef int n = L.shape[1]//3
+    cdef int n = L.shape[1]//2
     cdef int i, s
     cdef float tmp, p0, p1, p2
     with nogil:
         for s in prange(m, num_threads=t):
             tmp = 0.0
             for i in range(n):
-                p0 = L[s, 3*i+0]*(1 - f[s])*(1 - f[s])
-                p1 = L[s, 3*i+1]*2*f[s]*(1 - f[s])
-                p2 = L[s, 3*i+2]*f[s]*f[s]
+                p0 = L[s, 2*i+0]*(1 - f[s])*(1 - f[s])
+                p1 = L[s, 2*i+1]*2*f[s]*(1 - f[s])
+                p2 = (1.0 - L[s, 2*i+0] - L[s, 2*i+1])*f[s]*f[s]
                 tmp = tmp + (p1 + 2*p2)/(2*(p0 + p1 + p2))
             f[s] = tmp/(<float>n)
 
@@ -121,9 +121,9 @@ cpdef geno(float[:,::1] L, float[:,::1] P, signed char[:,::1] G, \
     with nogil:
         for s in prange(m, num_threads=t):
             for i in range(n):
-                p0 = L[s,3*i+0]*(1 - P[s,i])*(1 - P[s,i])
-                p1 = L[s,3*i+1]*2*P[s,i]*(1 - P[s,i])
-                p2 = L[s,3*i+2]*P[s,i]*P[s,i]
+                p0 = L[s,2*i+0]*(1 - P[s,i])*(1 - P[s,i])
+                p1 = L[s,2*i+1]*2*P[s,i]*(1 - P[s,i])
+                p2 = (1.0 - L[s, 2*i+0] - L[s, 2*i+1])*P[s,i]*P[s,i]
                 pSum = p0 + p1 + p2
 
                 # Call posterior maximum
@@ -155,10 +155,11 @@ cpdef genoInbreed(float[:,::1] L, float[:,::1] P, float[::1] F, \
     with nogil:
         for s in prange(m, num_threads=t):
             for i in range(n):
-                p0 = L[s,3*i+0]*((1 - P[s,i])*(1 - P[s,i]) + \
+                p0 = L[s,2*i+0]*((1 - P[s,i])*(1 - P[s,i]) + \
                         P[s,i]*(1 - P[s,i])*F[i])
-                p1 = L[s,3*i+1]*2*P[s,i]*(1 - P[s,i])
-                p2 = L[s,3*i+2]*(P[s,i]*P[s,i] + P[s,i]*(1 - P[s,i])*F[i])
+                p1 = L[s,2*i+1]*2*P[s,i]*(1 - P[s,i])
+                p2 = (1.0 - L[s, 2*i+0] - L[s, 2*i+1])*(P[s,i]*P[s,i] + \
+                        P[s,i]*(1 - P[s,i])*F[i])
                 pSum = p0 + p1 + p2
 
                 # Call maximum posterior
@@ -177,24 +178,3 @@ cpdef genoInbreed(float[:,::1] L, float[:,::1] P, float[::1] F, \
                         G[s,i] = 2
                     else:
                         G[s,i] = -9
-
-# Compute posterior genotype probabilities
-@boundscheck(False)
-@wraparound(False)
-cpdef computePost(float[:,::1] L, float[:,::1] P, int t):
-    cdef int m = P.shape[0]
-    cdef int n = P.shape[1]
-    cdef int i, s
-    cdef float p0, p1, p2, pSum
-    with nogil:
-        for s in prange(m, num_threads=t):
-            for i in range(n):
-                p0 = L[s,3*i+0]*(1 - P[s,i])*(1 - P[s,i])
-                p1 = L[s,3*i+1]*2*P[s,i]*(1 - P[s,i])
-                p2 = L[s,3*i+2]*P[s,i]*P[s,i]
-                pSum = p0 + p1 + p2
-
-                # Update L
-                L[s,3*i+0] = p0/pSum
-                L[s,3*i+1] = p1/pSum
-                L[s,3*i+2] = p2/pSum

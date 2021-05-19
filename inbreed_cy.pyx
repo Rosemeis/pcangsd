@@ -33,9 +33,9 @@ cpdef inbreedSites_update(float[:,::1] L, float[:,::1] P, float[::1] F, int t):
                 prior2 = prior2/priorSum
 
                 # Posterior
-                temp0 = L[s,3*i+0]*prior0
-                temp1 = L[s,3*i+1]*prior1
-                temp2 = L[s,3*i+2]*prior2
+                temp0 = L[s,2*i+0]*prior0
+                temp1 = L[s,2*i+1]*prior1
+                temp2 = (1.0 - L[s,2*i+0] - L[s,2*i+1])*prior2
                 tempSum = temp0 + temp1 + temp2
 
                 # Sum over individuals
@@ -82,15 +82,15 @@ cpdef loglike(float[:,::1] L, float[:,::1] P, float[::1] F, float[::1] T, int t)
                 prior2 = prior2/priorSum
 
                 # Likelihood*prior
-                like0 = L[s,3*i+0]*prior0
-                like1 = L[s,3*i+1]*prior1
-                like2 = L[s,3*i+2]*prior2
+                like0 = L[s,2*i+0]*prior0
+                like1 = L[s,2*i+1]*prior1
+                like2 = (1.0 - L[s, 2*i+0] - L[s, 2*i+1])*prior2
                 logAlt = logAlt + log(like0 + like1 + like2)
 
                 ### Null model
-                like0 = L[s,3*i+0]*(1 - P[s,i])*(1 - P[s,i])
-                like1 = L[s,3*i+1]*2*P[s,i]*(1 - P[s,i])
-                like2 = L[s,3*i+2]*P[s,i]*P[s,i]
+                like0 = L[s,2*i+0]*(1 - P[s,i])*(1 - P[s,i])
+                like1 = L[s,2*i+1]*2*P[s,i]*(1 - P[s,i])
+                like2 = (1.0 - L[s,2*i+0] - L[s,2*i+1])*P[s,i]*P[s,i]
                 logNull = logNull + log(like0 + like1 + like2)
             T[s] = 2*(logAlt - logNull)
 
@@ -122,9 +122,9 @@ cpdef inbreedSamples_update(float[:,::1] L, float[:,::1] P, float[::1] F, int t)
                 prior2 = prior2/priorSum
 
                 # Posterior
-                temp0 = L[s,3*i+0]*prior0
-                temp1 = L[s,3*i+1]*prior1
-                temp2 = L[s,3*i+2]*prior2
+                temp0 = L[s,2*i+0]*prior0
+                temp1 = L[s,2*i+1]*prior1
+                temp2 = (1.0 - L[s,2*i+0] - L[s,2*i+1])*prior2
                 tempSum = temp0 + temp1 + temp2
 
                 # Sum over individuals

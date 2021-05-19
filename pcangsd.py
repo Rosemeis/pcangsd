@@ -8,7 +8,7 @@ __author__ = "Jonas Meisner"
 # Argparse
 import argparse
 parser = argparse.ArgumentParser(prog="PCAngsd")
-parser.add_argument("--version", action="version", version="%(prog)s 1.01")
+parser.add_argument("--version", action="version", version="%(prog)s 1.02")
 parser.add_argument("-beagle", metavar="FILE",
 	help="Filepath to genotype likelihoods in gzipped Beagle format from ANGSD")
 parser.add_argument("-filter", metavar="FILE",
@@ -83,8 +83,6 @@ parser.add_argument("-pi_save", action="store_true",
 	help="Save individual allele frequencies")
 parser.add_argument("-dosage_save", action="store_true",
 	help="Save genotype dosages")
-parser.add_argument("-post_save", action="store_true",
-	help="Save posterior genotype probabilities")
 parser.add_argument("-sites_save", action="store_true",
 	help="Save boolean vector of used sites")
 parser.add_argument("-threads", metavar="INT", type=int, default=1,
@@ -113,7 +111,7 @@ def extract_length(filename):
 full = vars(parser.parse_args())
 deaf = vars(parser.parse_args([]))
 with open(args.out + ".args", "w") as f:
-	f.write("PCAngsd v.1.0\n")
+	f.write("PCAngsd v.1.02\n")
 	f.write("Time: " + datetime.now().strftime("%d/%m/%Y %H:%M:%S") + "\n")
 	f.write("Directory: " + str(os.getcwd()) + "\n")
 	f.write("Options:\n")
@@ -144,7 +142,7 @@ import admixture
 import tree
 
 ##### PCAngsd #####
-print("PCAngsd v.1.01")
+print("PCAngsd v.1.02")
 print("Using " + str(args.threads) + " thread(s).\n")
 
 # Parse data
@@ -154,14 +152,14 @@ if args.beagle is not None:
 		assert os.path.isfile(args.beagle), "Beagle file doesn't exist!"
 		L = reader_cy.readBeagle(args.beagle)
 		m = L.shape[0]
-		n = L.shape[1]//3
+		n = L.shape[1]//2
 	else:
 		nFilter = np.repeat(np.genfromtxt(args.filter, dtype=np.uint8), 3)
 		print("Only loading " + str(int(np.sum(nFilter)//3)) + "/" + \
 				str(nFilter.shape[0]//3) + " individuals.")
 		L = reader_cy.readBeagleFilter(args.beagle, nFilter, int(np.sum(nFilter)))
 		m = L.shape[0]
-		n = L.shape[1]//3
+		n = L.shape[1]//2
 		del nFilter
 else:
 	print("Parsing PLINK files.")
@@ -177,7 +175,7 @@ else:
 		G = np.fromfile(bed, dtype=np.uint8, offset=3)
 	G_len = ceil(n/4)
 	G = G.reshape(m, G_len)
-	L = np.zeros((m, 3*n), dtype=np.float32)
+	L = np.zeros((m, 2*n), dtype=np.float32)
 	reader_cy.convertBed(L, G, G_len, args.plink_error, m, n, args.threads)
 print("Loaded " + str(m) + " sites and " + str(n) + " individuals.")
 m_old = L.shape[0] # For future reference
@@ -225,7 +223,7 @@ if args.pi is None:
 	C, P, K = covariance.emPCA(L, f, args.e, args.iter, args.tole, args.threads)
 
 	# Save covariance matrix
-	np.savetxt(args.out + ".cov", C)
+	np.savetxt(args.out + ".cov", C, fmt="%.7f")
 	print("Saved covariance matrix as " + str(args.out) + ".cov (Text).\n")
 	del C
 
@@ -298,9 +296,9 @@ if args.inbreedSamples:
 								args.threads)
 
 	# Save inbreeding coefficients
-	np.savetxt(args.out + ".inbreed.samples", F)
+	np.savetxt(args.out + ".inbreed.samples", F, fmt="%.7f")
 	print("Saved per-individual inbreeding coefficients as " + str(args.out) + \
-			".inbreed.samples (Text).")
+			".inbreed.samples (Text).\n")
 	if args.genoInbreed is None:
 		del F
 
@@ -340,9 +338,9 @@ if args.admix:
 										args.admix_seed, True, args.threads)
 
 		# Save factor matrices
-		np.save(args.out + ".admix." + str(a_K) + ".Q", Q.astype(float))
+		np.savetxt(args.out + ".admix." + str(a_K) + ".Q", Q, fmt="%.7f")
 		print("Saved admixture proportions as " + str(args.out) + ".admix." + \
-				str(a_K) + ".Q.npy (Binary)")
+				str(a_K) + ".Q (Text)")
 		np.save(args.out + ".admix." + str(a_K) + ".F", F.astype(float))
 		print("Saved ancestral allele frequencies proportions as " + \
 				str(args.out) + ".admix." + str(a_K) + ".F.npy (Binary)\n")
@@ -357,9 +355,9 @@ if args.admix:
 		print("Search concluded: Alpha=" + str(aB) + ", log-likelihood" + str(lB))
 
 		# Save factor matrices
-		np.save(args.out + ".admix." + str(a_K) + ".Q", Q.astype(float))
+		np.savetxt(args.out + ".admix." + str(a_K) + ".Q", Q, fmt="%.7f")
 		print("Saved admixture proportions as " + str(args.out) + ".admix." + \
-				str(a_K) + ".Q.npy (Binary)")
+				str(a_K) + ".Q (Text)")
 		np.save(args.out + ".admix." + str(a_K) + ".F", F.astype(float))
 		print("Saved ancestral allele frequencies proportions as " + \
 				str(args.out) + ".admix." + str(a_K) + ".F.npy (Binary)\n")
@@ -404,14 +402,6 @@ if args.dosage_save:
 	print("Saved genotype dosages as " + str(args.out) + \
 			".dosage.npy (Binary - np.float32)\n")
 	del E
-
-# Posterior genotype probabilities
-if args.post_save:
-	import shared_cy
-	shared_cy.computePost(L, P, args.threads)
-	np.save(args.out + ".post.beagle", L)
-	print("Saved posterior genotype probabilities as " + str(args.out) + \
-			".post.beagle (Binary - np.float32)")
 
 # Individual allele frequencies
 if args.pi_save:

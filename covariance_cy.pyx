@@ -10,16 +10,16 @@ from libc.math cimport sqrt
 @wraparound(False)
 cpdef updateNormal(float[:,::1] L, float[::1] f, float[:,::1] E, int t):
 	cdef int m = L.shape[0]
-	cdef int n = L.shape[1]//3
+	cdef int n = L.shape[1]//2
 	cdef int i, s
 	cdef float p0, p1, p2
 	with nogil:
 		for s in prange(m, num_threads=t):
 			for i in range(n):
 				# Update dosage
-				p0 = L[s,3*i+0]*(1 - f[s])*(1 - f[s])
-				p1 = L[s,3*i+1]*2*f[s]*(1 - f[s])
-				p2 = L[s,3*i+2]*f[s]*f[s]
+				p0 = L[s,2*i+0]*(1 - f[s])*(1 - f[s])
+				p1 = L[s,2*i+1]*2*f[s]*(1 - f[s])
+				p2 = (1.0 - L[s, 2*i+0] - L[s, 2*i+1])*f[s]*f[s]
 				E[s,i] = (p1 + 2*p2)/(p0 + p1 + p2) - 2*f[s]
 
 # Update posterior expectations (PCAngsd method)
@@ -27,7 +27,7 @@ cpdef updateNormal(float[:,::1] L, float[::1] f, float[:,::1] E, int t):
 @wraparound(False)
 cpdef updatePCAngsd(float[:,::1] L, float[::1] f, float[:,::1] P, float[:,::1] E, int t):
 	cdef int m = L.shape[0]
-	cdef int n = L.shape[1]//3
+	cdef int n = L.shape[1]//2
 	cdef int i, s
 	cdef float p0, p1, p2
 	with nogil:
@@ -39,9 +39,9 @@ cpdef updatePCAngsd(float[:,::1] L, float[::1] f, float[:,::1] P, float[:,::1] E
 				P[s,i] = min(max(P[s,i], 1e-4), 1-(1e-4))
 
 				# Center dosage
-				p0 = L[s,3*i+0]*(1 - P[s,i])*(1 - P[s,i])
-				p1 = L[s,3*i+1]*2*P[s,i]*(1 - P[s,i])
-				p2 = L[s,3*i+2]*P[s,i]*P[s,i]
+				p0 = L[s,2*i+0]*(1 - P[s,i])*(1 - P[s,i])
+				p1 = L[s,2*i+1]*2*P[s,i]*(1 - P[s,i])
+				p2 = (1.0 - L[s, 2*i+0] - L[s, 2*i+1])*P[s,i]*P[s,i]
 				E[s,i] = (p1 + 2*p2)/(p0 + p1 + p2) - 2*f[s]
 
 # Standardize posterior expectations (Fumagalli method)
@@ -50,16 +50,16 @@ cpdef updatePCAngsd(float[:,::1] L, float[::1] f, float[:,::1] P, float[:,::1] E
 cpdef covNormal(float[:,::1] L, float[::1] f, float[:,::1] E, float[::1] dCov, \
 				int t):
 	cdef int m = L.shape[0]
-	cdef int n = L.shape[1]//3
+	cdef int n = L.shape[1]//2
 	cdef int i, s
 	cdef float p0, p1, p2, pSum, temp
 	with nogil:
 		for s in prange(m, num_threads=t):
 			for i in range(n):
 				# Standardize dosage
-				p0 = L[s,3*i+0]*(1 - f[s])*(1 - f[s])
-				p1 = L[s,3*i+1]*2*f[s]*(1 - f[s])
-				p2 = L[s,3*i+2]*f[s]*f[s]
+				p0 = L[s,2*i+0]*(1 - f[s])*(1 - f[s])
+				p1 = L[s,2*i+1]*2*f[s]*(1 - f[s])
+				p2 = (1.0 - L[s, 2*i+0] - L[s, 2*i+1])*f[s]*f[s]
 				pSum = p0 + p1 + p2
 				E[s,i] = (p1 + 2*p2)/pSum - 2*f[s]
 				E[s,i] = E[s,i]/sqrt(2*f[s]*(1 - f[s]))
@@ -76,7 +76,7 @@ cpdef covNormal(float[:,::1] L, float[::1] f, float[:,::1] E, float[::1] dCov, \
 cpdef covPCAngsd(float[:,::1] L, float[::1] f, float[:,::1] P, float[:,::1] E, \
 					float[::1] dCov, int t):
 	cdef int m = L.shape[0]
-	cdef int n = L.shape[1]//3
+	cdef int n = L.shape[1]//2
 	cdef int i, s
 	cdef float p0, p1, p2, pSum, temp
 	with nogil:
@@ -88,9 +88,9 @@ cpdef covPCAngsd(float[:,::1] L, float[::1] f, float[:,::1] P, float[:,::1] E, \
 				P[s,i] = min(max(P[s,i], 1e-4), 1-(1e-4))
 
 				# Standardize dosage
-				p0 = L[s,3*i+0]*(1 - P[s,i])*(1 - P[s,i])
-				p1 = L[s,3*i+1]*2*P[s,i]*(1 - P[s,i])
-				p2 = L[s,3*i+2]*P[s,i]*P[s,i]
+				p0 = L[s,2*i+0]*(1 - P[s,i])*(1 - P[s,i])
+				p1 = L[s,2*i+1]*2*P[s,i]*(1 - P[s,i])
+				p2 = (1.0 - L[s, 2*i+0] - L[s, 2*i+1])*P[s,i]*P[s,i]
 				pSum = p0 + p1 + p2
 				E[s,i] = (p1 + 2*p2)/pSum - 2*f[s]
 				E[s,i] = E[s,i]/sqrt(2*f[s]*(1 - f[s]))
@@ -107,16 +107,16 @@ cpdef covPCAngsd(float[:,::1] L, float[::1] f, float[:,::1] P, float[:,::1] E, \
 cpdef updateSelection(float[:,::1] L, float[::1] f, float[:,::1] P, \
 						float[:,::1] E, int t):
 	cdef int m = L.shape[0]
-	cdef int n = L.shape[1]//3
+	cdef int n = L.shape[1]//2
 	cdef int i, s
 	cdef float p0, p1, p2
 	with nogil:
 		for s in prange(m, num_threads=t):
 			for i in range(n):
 				# Standardize dosage
-				p0 = L[s,3*i+0]*(1 - P[s,i])*(1 - P[s,i])
-				p1 = L[s,3*i+1]*2*P[s,i]*(1 - P[s,i])
-				p2 = L[s,3*i+2]*P[s,i]*P[s,i]
+				p0 = L[s,2*i+0]*(1 - P[s,i])*(1 - P[s,i])
+				p1 = L[s,2*i+1]*2*P[s,i]*(1 - P[s,i])
+				p2 = (1.0 - L[s, 2*i+0] - L[s, 2*i+1])*P[s,i]*P[s,i]
 				E[s,i] = (p1 + 2*p2)/(p0 + p1 + p2) - 2*f[s]
 				E[s,i] = E[s,i]/sqrt(2*f[s]*(1 - f[s]))
 
@@ -125,14 +125,14 @@ cpdef updateSelection(float[:,::1] L, float[::1] f, float[:,::1] P, \
 @wraparound(False)
 cpdef updateDosages(float[:,::1] L, float[:,::1] P, float[:,::1] E, int t):
 	cdef int m = L.shape[0]
-	cdef int n = L.shape[1]//3
+	cdef int n = L.shape[1]//2
 	cdef int i, s
 	cdef float p0, p1, p2
 	with nogil:
 		for s in prange(m, num_threads=t):
 			for i in range(n):
 				# Update dosage
-				p0 = L[s,3*i+0]*(1 - P[s,i])*(1 - P[s,i])
-				p1 = L[s,3*i+1]*2*P[s,i]*(1 - P[s,i])
-				p2 = L[s,3*i+2]*P[s,i]*P[s,i]
+				p0 = L[s,2*i+0]*(1 - P[s,i])*(1 - P[s,i])
+				p1 = L[s,2*i+1]*2*P[s,i]*(1 - P[s,i])
+				p2 = (1.0 - L[s, 2*i+0] - L[s, 2*i+1])*P[s,i]*P[s,i]
 				E[s,i] = (p1 + 2*p2)/(p0 + p1 + p2)

@@ -30,7 +30,7 @@ def estimatePi(E, K, P, f):
 ### PCAngsd iterations ###
 def emPCA(L, f, e, iter, tole, t):
     m = L.shape[0]
-    n = L.shape[1]//3
+    n = L.shape[1]//2
 
     # Initiate matrices
     E = np.zeros((m, n), dtype=np.float32)
