@@ -70,7 +70,9 @@ def emPCA(L, f, e, iter, tole, t):
 
         K = max([1, np.argmin(mapTest) + 1]) # Number of principal components retained
         print("Using " + str(K) + " principal components (MAP test).")
-        del d, eVal, eVec, loading, mapTest, partcov, pr
+        del d, eVal, eVec, loading, mapTest, partcov
+        if 'pr' in vars():
+            del pr
     else:
         K = e
         print("Using " + str(K) + " principal components (manually selected).")

@@ -87,7 +87,7 @@ cpdef np.ndarray[DTYPE_t, ndim=2] readBeagleFilter(str beagle, \
             token = strtok(NULL, delims)
             token = strtok(NULL, delims)
             for i in range(n):
-                if (F[i] == 1) or ((i + 1) % 3 != 0):
+                if (F[i] == 1) or ((i + 1) % 3 == 0):
                     L_ind.push_back(atof(strtok(NULL, delims)))
                 else:
                     token = strtok(NULL, delims)
