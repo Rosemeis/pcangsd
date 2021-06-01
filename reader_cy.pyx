@@ -48,11 +48,11 @@ cpdef np.ndarray[DTYPE_t, ndim=2] readBeagle(str beagle):
             L.push_back(L_ind)
             L_ind.clear()
     m = L.size() # Number of sites
-    cdef np.ndarray[DTYPE_t, ndim=2] L_np = np.empty((m, n//3*2), dtype=DTYPE)
+    cdef np.ndarray[DTYPE_t, ndim=2] L_np = np.empty((m, (n//3)*2), dtype=DTYPE)
     cdef float *L_ptr
     for s in range(m):
         L_ptr = &L[s][0]
-        L_np[s] = np.asarray(<float[:(n//3*2)]> L_ptr)
+        L_np[s] = np.asarray(<float[:((n//3)*2)]> L_ptr)
     return L_np
 
 # Read Beagle text format and filtering individuals
@@ -87,18 +87,20 @@ cpdef np.ndarray[DTYPE_t, ndim=2] readBeagleFilter(str beagle, \
             token = strtok(NULL, delims)
             token = strtok(NULL, delims)
             for i in range(n):
-                if (F[i] == 1) or ((i + 1) % 3 == 0):
-                    L_ind.push_back(atof(strtok(NULL, delims)))
-                else:
+                if (i + 1) % 3 == 0:
                     token = strtok(NULL, delims)
+                elif F[i] == 0:
+                    token = strtok(NULL, delims)
+                else:
+                    L_ind.push_back(atof(strtok(NULL, delims)))
             L.push_back(L_ind)
             L_ind.clear()
     m = L.size() # Number of sites
-    cdef np.ndarray[DTYPE_t, ndim=2] L_np = np.empty((m, N//3*2), dtype=DTYPE)
+    cdef np.ndarray[DTYPE_t, ndim=2] L_np = np.empty((m, (N//3)*2), dtype=DTYPE)
     cdef float *L_ptr
     for s in range(m):
         L_ptr = &L[s][0]
-        L_np[s] = np.asarray(<float[:(N//3*2)]> L_ptr)
+        L_np[s] = np.asarray(<float[:((N//3)*2)]> L_ptr)
     return L_np
 
 # Convert PLINK bed format to Beagle format
