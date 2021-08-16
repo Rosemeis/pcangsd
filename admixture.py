@@ -90,7 +90,7 @@ def admixNMF(L, P, K, alpha, iter, tole, batch, seed, verbose, t):
     shared_cy.frobeniusThread(X, P, frob_vec, t)
     print("Frobenius error: " + str(np.sqrt(np.sum(frob_vec))))
     admixture_cy.loglike(L, X, logl_vec, t)
-    loglike = np.sum(logl_vec)
+    loglike = np.sum(logl_vec, dtype=float)
     print("Log-likelihood: " + str(loglike))
     del logl_vec
     return Q, F, loglike
