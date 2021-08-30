@@ -1,3 +1,4 @@
+# cython: language_level=3, boundscheck=False, wraparound=False, initializedcheck=False, cdivision=True
 import numpy as np
 cimport numpy as np
 from cython.parallel import prange
@@ -6,8 +7,6 @@ from libc.math cimport log
 
 ##### Cython functions for inbreed.py #####
 ### Per-site
-@boundscheck(False)
-@wraparound(False)
 cpdef inbreedSites_update(float[:,::1] L, float[:,::1] P, float[::1] F, int t):
     cdef int m = P.shape[0]
     cdef int n = P.shape[1]
@@ -56,14 +55,13 @@ cpdef inbreedSites_update(float[:,::1] L, float[:,::1] P, float[::1] F, int t):
             F[s] = min(max(-1.0, F[s]), 1.0)
 
 ### Log-likelihoods
-@boundscheck(False)
-@wraparound(False)
-cpdef loglike(float[:,::1] L, float[:,::1] P, float[::1] F, float[::1] T, int t):
+cpdef loglike(float[:,::1] L, float[:,::1] P, float[::1] F, \
+                double[::1] T, int t):
     cdef int m = P.shape[0]
     cdef int n = P.shape[1]
     cdef int i, s
-    cdef float prior0, prior1, prior2, priorSum, like0, like1, like2, Fadj, \
-                logAlt, logNull
+    cdef float prior0, prior1, prior2, priorSum, like0, like1, like2, Fadj
+    cdef double logAlt, logNull
     with nogil:
         for s in prange(m, num_threads=t):
             logAlt = 0.0
@@ -95,8 +93,6 @@ cpdef loglike(float[:,::1] L, float[:,::1] P, float[::1] F, float[::1] T, int t)
             T[s] = 2*(logAlt - logNull)
 
 ### Per-individual
-@boundscheck(False)
-@wraparound(False)
 cpdef inbreedSamples_update(float[:,::1] L, float[:,::1] P, float[::1] F, int t):
     cdef int m = P.shape[0]
     cdef int n = P.shape[1]

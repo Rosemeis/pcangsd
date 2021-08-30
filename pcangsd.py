@@ -8,11 +8,13 @@ __author__ = "Jonas Meisner"
 # Argparse
 import argparse
 parser = argparse.ArgumentParser(prog="PCAngsd")
-parser.add_argument("--version", action="version", version="%(prog)s 1.02")
+parser.add_argument("--version", action="version", version="%(prog)s 1.03")
 parser.add_argument("-beagle", metavar="FILE",
 	help="Filepath to genotype likelihoods in gzipped Beagle format from ANGSD")
 parser.add_argument("-filter", metavar="FILE",
 	help="Input file of vector for filtering individuals")
+parser.add_argument("-filterSites", metavar="FILE",
+	help="Input file of vector for filtering sites")
 parser.add_argument("-plink", metavar="FILE-PREFIX",
 	help="Prefix PLINK files (.bed, .bim, .fam)")
 parser.add_argument("-plink_error", metavar="FLOAT", type=float, default=0.0,
@@ -111,7 +113,7 @@ def extract_length(filename):
 full = vars(parser.parse_args())
 deaf = vars(parser.parse_args([]))
 with open(args.out + ".args", "w") as f:
-	f.write("PCAngsd v.1.02\n")
+	f.write("PCAngsd v.1.03\n")
 	f.write("Time: " + datetime.now().strftime("%d/%m/%Y %H:%M:%S") + "\n")
 	f.write("Directory: " + str(os.getcwd()) + "\n")
 	f.write("Options:\n")
@@ -142,28 +144,47 @@ import admixture
 import tree
 
 ##### PCAngsd #####
-print("PCAngsd v.1.02")
+print("PCAngsd v.1.03")
 print("Using " + str(args.threads) + " thread(s).\n")
 
 # Parse data
 if args.beagle is not None:
 	print("Parsing Beagle file.")
-	if args.filter is None:
+	if (args.filter is None) and (args.filterSites is None):
 		assert os.path.isfile(args.beagle), "Beagle file doesn't exist!"
 		L = reader_cy.readBeagle(args.beagle)
 		m = L.shape[0]
 		n = L.shape[1]//2
 	else:
-		nFilter = np.repeat(np.genfromtxt(args.filter, dtype=np.uint8), 3)
-		print("Only loading " + str(int(np.sum(nFilter)//3)) + "/" + \
-				str(nFilter.shape[0]//3) + " individuals.")
-		L = reader_cy.readBeagleFilter(args.beagle, nFilter, int(np.sum(nFilter)))
-		m = L.shape[0]
-		n = L.shape[1]//2
-		del nFilter
+		if args.filterSites is not None:
+			mFilter = np.genfromtxt(args.filterSites, dtype=np.uint8)
+			print("Only loading " + str(int(np.sum(mFilter))) + "/" + \
+					str(mFilter.shape[0]) + " sites.")
+			if args.filter is None:
+				L = reader_cy.readBeagleFilterSites(args.beagle, mFilter)
+				m = L.shape[0]
+				n = L.shape[1]//2
+				del mFilter
+		if args.filter is not None:
+			nFilter = np.repeat(np.genfromtxt(args.filter, dtype=np.uint8), 3)
+			print("Only loading " + str(int(np.sum(nFilter)//3)) + "/" + \
+					str(nFilter.shape[0]//3) + " individuals.")
+			if args.filterSites is None:
+				L = reader_cy.readBeagleFilterInds(args.beagle, nFilter, \
+														int(np.sum(nFilter)))
+				m = L.shape[0]
+				n = L.shape[1]//2
+				del nFilter
+		if (args.filterSites is not None) and (args.filter is not None):
+			L = reader_cy.readBeagleFilter(args.beagle, mFilter, nFilter, \
+													int(np.sum(nFilter)))
+			m = L.shape[0]
+			n = L.shape[1]//2
+			del mFilter, nFilter
 else:
 	print("Parsing PLINK files.")
 	assert args.filter is None, "Please perform sample filtering in PLINK!"
+	assert args.filterSites is None, "Please perform site filtering in PLINK!"
 	assert os.path.isfile(args.plink + ".bed"), "Bed file doesn't exist!"
 	assert os.path.isfile(args.plink + ".bim"), "Bim file doesn't exist!"
 	assert os.path.isfile(args.plink + ".fam"), "Fam file doesn't exist!"

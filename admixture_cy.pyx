@@ -1,3 +1,4 @@
+# cython: language_level=3, boundscheck=False, wraparound=False, initializedcheck=False, cdivision=True
 import numpy as np
 cimport numpy as np
 from cython.parallel import prange
@@ -6,8 +7,6 @@ from libc.math cimport log
 
 ##### Cython functions for admixture estimation #####
 # Update factor matrices
-@boundscheck(False)
-@wraparound(False)
 cpdef updateF(float[:,::1] F, float[:,::1] A, float[:,::1] FB):
     cdef int m = F.shape[0]
     cdef int K = F.shape[1]
@@ -17,8 +16,6 @@ cpdef updateF(float[:,::1] F, float[:,::1] A, float[:,::1] FB):
             F[s,k] = F[s,k]*A[s,k]/FB[s,k]
             F[s,k] = min(max(F[s,k], 1e-4), 1-(1e-4))
 
-@boundscheck(False)
-@wraparound(False)
 cpdef updateQ(float[:,::1] Q, float[:,::1] A, float[:,::1] QB, float alpha):
     cdef int n = Q.shape[0]
     cdef int K = Q.shape[1]
@@ -29,8 +26,6 @@ cpdef updateQ(float[:,::1] Q, float[:,::1] A, float[:,::1] QB, float alpha):
             Q[i,k] = min(max(Q[i,k], 1e-4), 1-(1e-4))
 
 # Log-likelihood
-@boundscheck(False)
-@wraparound(False)
 cpdef loglike(float[:,::1] L, float[:,::1] X, float[::1] loglike_vec, int t):
     cdef int m = X.shape[0]
     cdef int n = X.shape[1]

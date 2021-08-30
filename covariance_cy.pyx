@@ -1,3 +1,4 @@
+# cython: language_level=3, boundscheck=False, wraparound=False, initializedcheck=False, cdivision=True
 import numpy as np
 cimport numpy as np
 from cython.parallel import prange
@@ -6,8 +7,6 @@ from libc.math cimport sqrt
 
 ##### Cython functions for covariance.py ######
 # Update posterior expectations (Fumagalli method)
-@boundscheck(False)
-@wraparound(False)
 cpdef updateNormal(float[:,::1] L, float[::1] f, float[:,::1] E, int t):
 	cdef int m = L.shape[0]
 	cdef int n = L.shape[1]//2
@@ -23,8 +22,6 @@ cpdef updateNormal(float[:,::1] L, float[::1] f, float[:,::1] E, int t):
 				E[s,i] = (p1 + 2*p2)/(p0 + p1 + p2) - 2*f[s]
 
 # Update posterior expectations (PCAngsd method)
-@boundscheck(False)
-@wraparound(False)
 cpdef updatePCAngsd(float[:,::1] L, float[::1] f, float[:,::1] P, float[:,::1] E, int t):
 	cdef int m = L.shape[0]
 	cdef int n = L.shape[1]//2
@@ -45,8 +42,6 @@ cpdef updatePCAngsd(float[:,::1] L, float[::1] f, float[:,::1] P, float[:,::1] E
 				E[s,i] = (p1 + 2*p2)/(p0 + p1 + p2) - 2*f[s]
 
 # Standardize posterior expectations (Fumagalli method)
-@boundscheck(False)
-@wraparound(False)
 cpdef covNormal(float[:,::1] L, float[::1] f, float[:,::1] E, float[::1] dCov, \
 				int t):
 	cdef int m = L.shape[0]
@@ -71,8 +66,6 @@ cpdef covNormal(float[:,::1] L, float[::1] f, float[:,::1] E, float[::1] dCov, \
 				dCov[i] = dCov[i] + temp/(2*f[s]*(1 - f[s]))
 
 # Standardize posterior expectations (PCAngsd method)
-@boundscheck(False)
-@wraparound(False)
 cpdef covPCAngsd(float[:,::1] L, float[::1] f, float[:,::1] P, float[:,::1] E, \
 					float[::1] dCov, int t):
 	cdef int m = L.shape[0]
@@ -102,8 +95,6 @@ cpdef covPCAngsd(float[:,::1] L, float[::1] f, float[:,::1] P, float[:,::1] E, \
 				dCov[i] = dCov[i] + temp/(2*f[s]*(1 - f[s]))
 
 # Standardize posterior expectations for selection
-@boundscheck(False)
-@wraparound(False)
 cpdef updateSelection(float[:,::1] L, float[::1] f, float[:,::1] P, \
 						float[:,::1] E, int t):
 	cdef int m = L.shape[0]
@@ -121,8 +112,6 @@ cpdef updateSelection(float[:,::1] L, float[::1] f, float[:,::1] P, \
 				E[s,i] = E[s,i]/sqrt(2*f[s]*(1 - f[s]))
 
 # Update dosages for saving
-@boundscheck(False)
-@wraparound(False)
 cpdef updateDosages(float[:,::1] L, float[:,::1] P, float[:,::1] E, int t):
 	cdef int m = L.shape[0]
 	cdef int n = L.shape[1]//2

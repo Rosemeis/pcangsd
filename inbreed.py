@@ -17,7 +17,7 @@ import inbreed_cy
 def inbreedSites(L, P, iter, tole, t):
     m, n = P.shape
     F = np.zeros(m, dtype=np.float32)
-    T = np.zeros(m, dtype=np.float32)
+    T = np.zeros(m, dtype=np.float64)
 
     # EM algorithm
     for i in range(iter):
