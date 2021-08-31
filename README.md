@@ -1,6 +1,6 @@
 # PCAngsd
 
-**Version 1.02**
+**Version 1.03**
 *I have reworked a lot of the parallelization in PCAngsd and removed some of its clunky prototype features. Python 3.x versions will only be targeted in future updates (however, it might still be compatible with v.2.7).*
 
 Framework for analyzing low-depth next-generation sequencing (NGS) data in heterogeneous/structured populations using principal component analysis (PCA). Population structure is inferred by estimating individual allele frequencies in an iterative approach using a truncated SVD model. The covariance matrix is estimated using the estimated individual allele frequencies as prior information for the unobserved genotypes in low-depth NGS data.
@@ -55,6 +55,10 @@ R can also read Numpy matrices using the "RcppCNPy" R library:
 library(RcppCNPy)
 C <- as.matrix(read.table("output.cov")) # Reads in estimated covariance matrix
 D <- npyLoad("output.selection.npy") # Reads PC based selection statistics
+
+# Plot PCA plot
+e <- eigen(C)
+plot(e$vectors[,1:2], xlab="PC1", ylab="PC2", main="PCAngsd")
 ```
 
 
