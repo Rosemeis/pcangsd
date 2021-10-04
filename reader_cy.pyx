@@ -209,17 +209,17 @@ cpdef convertBed(float[:,::1] L, unsigned char[:,::1] G, int G_len, float e, \
                 for bytepart in range(4):
                     code = recode[byte & mask]
                     if code == 0:
-                        L[s,3*i+0] = e*e
-                        L[s,3*i+1] = 2*e*(1 - e)
+                        L[s,2*i+0] = e*e
+                        L[s,2*i+1] = 2*e*(1 - e)
                     elif code == 1:
-                        L[s,3*i+0] = (1 - e)*e
-                        L[s,3*i+1] = (1 - e)*(1 - e) + e*e
+                        L[s,2*i+0] = (1 - e)*e
+                        L[s,2*i+1] = (1 - e)*(1 - e) + e*e
                     elif code == 2:
-                        L[s,3*i+0] = (1 - e)*(1 - e)
-                        L[s,3*i+1] = 2*e*(1 - e)
+                        L[s,2*i+0] = (1 - e)*(1 - e)
+                        L[s,2*i+1] = 2*e*(1 - e)
                     else:
-                        L[s,3*i+0] = 0.333333
-                        L[s,3*i+1] = 0.333333
+                        L[s,2*i+0] = 0.333333
+                        L[s,2*i+1] = 0.333333
                     byte = byte >> 2
                     i = i + 1
                     if i == n:

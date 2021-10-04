@@ -18,7 +18,7 @@ cpdef updateNormal(float[:,::1] L, float[::1] f, float[:,::1] E, int t):
 				# Update dosage
 				p0 = L[s,2*i+0]*(1 - f[s])*(1 - f[s])
 				p1 = L[s,2*i+1]*2*f[s]*(1 - f[s])
-				p2 = (1.0 - L[s, 2*i+0] - L[s, 2*i+1])*f[s]*f[s]
+				p2 = (1.0 - L[s,2*i+0] - L[s,2*i+1])*f[s]*f[s]
 				E[s,i] = (p1 + 2*p2)/(p0 + p1 + p2) - 2*f[s]
 
 # Update posterior expectations (PCAngsd method)
@@ -38,7 +38,7 @@ cpdef updatePCAngsd(float[:,::1] L, float[::1] f, float[:,::1] P, float[:,::1] E
 				# Center dosage
 				p0 = L[s,2*i+0]*(1 - P[s,i])*(1 - P[s,i])
 				p1 = L[s,2*i+1]*2*P[s,i]*(1 - P[s,i])
-				p2 = (1.0 - L[s, 2*i+0] - L[s, 2*i+1])*P[s,i]*P[s,i]
+				p2 = (1.0 - L[s,2*i+0] - L[s,2*i+1])*P[s,i]*P[s,i]
 				E[s,i] = (p1 + 2*p2)/(p0 + p1 + p2) - 2*f[s]
 
 # Standardize posterior expectations (Fumagalli method)
@@ -54,7 +54,7 @@ cpdef covNormal(float[:,::1] L, float[::1] f, float[:,::1] E, float[::1] dCov, \
 				# Standardize dosage
 				p0 = L[s,2*i+0]*(1 - f[s])*(1 - f[s])
 				p1 = L[s,2*i+1]*2*f[s]*(1 - f[s])
-				p2 = (1.0 - L[s, 2*i+0] - L[s, 2*i+1])*f[s]*f[s]
+				p2 = (1.0 - L[s,2*i+0] - L[s,2*i+1])*f[s]*f[s]
 				pSum = p0 + p1 + p2
 				E[s,i] = (p1 + 2*p2)/pSum - 2*f[s]
 				E[s,i] = E[s,i]/sqrt(2*f[s]*(1 - f[s]))
@@ -83,7 +83,7 @@ cpdef covPCAngsd(float[:,::1] L, float[::1] f, float[:,::1] P, float[:,::1] E, \
 				# Standardize dosage
 				p0 = L[s,2*i+0]*(1 - P[s,i])*(1 - P[s,i])
 				p1 = L[s,2*i+1]*2*P[s,i]*(1 - P[s,i])
-				p2 = (1.0 - L[s, 2*i+0] - L[s, 2*i+1])*P[s,i]*P[s,i]
+				p2 = (1.0 - L[s,2*i+0] - L[s,2*i+1])*P[s,i]*P[s,i]
 				pSum = p0 + p1 + p2
 				E[s,i] = (p1 + 2*p2)/pSum - 2*f[s]
 				E[s,i] = E[s,i]/sqrt(2*f[s]*(1 - f[s]))
@@ -107,7 +107,7 @@ cpdef updateSelection(float[:,::1] L, float[::1] f, float[:,::1] P, \
 				# Standardize dosage
 				p0 = L[s,2*i+0]*(1 - P[s,i])*(1 - P[s,i])
 				p1 = L[s,2*i+1]*2*P[s,i]*(1 - P[s,i])
-				p2 = (1.0 - L[s, 2*i+0] - L[s, 2*i+1])*P[s,i]*P[s,i]
+				p2 = (1.0 - L[s,2*i+0] - L[s,2*i+1])*P[s,i]*P[s,i]
 				E[s,i] = (p1 + 2*p2)/(p0 + p1 + p2) - 2*f[s]
 				E[s,i] = E[s,i]/sqrt(2*f[s]*(1 - f[s]))
 
@@ -123,5 +123,5 @@ cpdef updateDosages(float[:,::1] L, float[:,::1] P, float[:,::1] E, int t):
 				# Update dosage
 				p0 = L[s,2*i+0]*(1 - P[s,i])*(1 - P[s,i])
 				p1 = L[s,2*i+1]*2*P[s,i]*(1 - P[s,i])
-				p2 = (1.0 - L[s, 2*i+0] - L[s, 2*i+1])*P[s,i]*P[s,i]
+				p2 = (1.0 - L[s,2*i+0] - L[s,2*i+1])*P[s,i]*P[s,i]
 				E[s,i] = (p1 + 2*p2)/(p0 + p1 + p2)

@@ -16,9 +16,9 @@ cpdef emMAF_update(float[:,::1] L, float[::1] f, int t):
         for s in prange(m, num_threads=t):
             tmp = 0.0
             for i in range(n):
-                p0 = L[s, 2*i+0]*(1 - f[s])*(1 - f[s])
-                p1 = L[s, 2*i+1]*2*f[s]*(1 - f[s])
-                p2 = (1.0 - L[s, 2*i+0] - L[s, 2*i+1])*f[s]*f[s]
+                p0 = L[s,2*i+0]*(1 - f[s])*(1 - f[s])
+                p1 = L[s,2*i+1]*2*f[s]*(1 - f[s])
+                p2 = (1.0 - L[s,2*i+0] - L[s,2*i+1])*f[s]*f[s]
                 tmp = tmp + (p1 + 2*p2)/(2*(p0 + p1 + p2))
             f[s] = tmp/(<float>n)
 
@@ -108,7 +108,7 @@ cpdef geno(float[:,::1] L, float[:,::1] P, signed char[:,::1] G, \
             for i in range(n):
                 p0 = L[s,2*i+0]*(1 - P[s,i])*(1 - P[s,i])
                 p1 = L[s,2*i+1]*2*P[s,i]*(1 - P[s,i])
-                p2 = (1.0 - L[s, 2*i+0] - L[s, 2*i+1])*P[s,i]*P[s,i]
+                p2 = (1.0 - L[s,2*i+0] - L[s,2*i+1])*P[s,i]*P[s,i]
                 pSum = p0 + p1 + p2
 
                 # Call posterior maximum
@@ -141,7 +141,7 @@ cpdef genoInbreed(float[:,::1] L, float[:,::1] P, float[::1] F, \
                 p0 = L[s,2*i+0]*((1 - P[s,i])*(1 - P[s,i]) + \
                         P[s,i]*(1 - P[s,i])*F[i])
                 p1 = L[s,2*i+1]*2*P[s,i]*(1 - P[s,i])
-                p2 = (1.0 - L[s, 2*i+0] - L[s, 2*i+1])*(P[s,i]*P[s,i] + \
+                p2 = (1.0 - L[s,2*i+0] - L[s,2*i+1])*(P[s,i]*P[s,i] + \
                         P[s,i]*(1 - P[s,i])*F[i])
                 pSum = p0 + p1 + p2
 
