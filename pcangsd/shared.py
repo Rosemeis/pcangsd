@@ -9,7 +9,7 @@ __author__ = "Jonas Meisner"
 import numpy as np
 
 # Import scripts
-import shared_cy
+from pcangsd import shared_cy
 
 ##### Functions #####
 ### Estimate MAF ###

@@ -9,8 +9,8 @@ __author__ = "Jonas Meisner"
 import numpy as np
 
 # Import scripts
-import shared_cy
-import inbreed_cy
+from pcangsd import shared_cy
+from pcangsd import inbreed_cy
 
 ##### Inbreeding coefficients #####
 ### Per-site inbreeding coefficients ###
