@@ -1,9 +1,10 @@
 # cython: language_level=3, boundscheck=False, wraparound=False, initializedcheck=False, cdivision=True
 import numpy as np
 cimport numpy as np
-from cython.parallel import prange
+from cython.parallel import prange, parallel
 from cython import boundscheck, wraparound
 from libc.math cimport sqrt
+from libc.stdlib cimport malloc, free
 
 ##### Cython functions for covariance.py ######
 # Update posterior expectations (Fumagalli method)
@@ -46,10 +47,14 @@ cpdef covNormal(float[:,::1] L, float[::1] f, float[:,::1] E, float[::1] dCov, \
 				int t):
 	cdef int m = L.shape[0]
 	cdef int n = L.shape[1]//2
-	cdef int i, s
+	cdef int i, j, k, s
 	cdef float p0, p1, p2, pSum, temp
-	with nogil:
-		for s in prange(m, num_threads=t):
+	cdef float* dPrivate
+	with nogil, parallel(num_threads=t):
+		dPrivate = <float*>malloc(sizeof(float)*n)
+		for j in range(n):
+			dPrivate[j] = 0.0
+		for s in prange(m):
 			for i in range(n):
 				# Standardize dosage
 				p0 = L[s,2*i+0]*(1 - f[s])*(1 - f[s])
@@ -63,17 +68,25 @@ cpdef covNormal(float[:,::1] L, float[::1] f, float[:,::1] E, float[::1] dCov, \
 				temp = (0 - 2*f[s])*(0 - 2*f[s])*(p0/pSum)
 				temp = temp + (1 - 2*f[s])*(1 - 2*f[s])*(p1/pSum)
 				temp = temp + (2 - 2*f[s])*(2 - 2*f[s])*(p2/pSum)
-				dCov[i] = dCov[i] + temp/(2*f[s]*(1 - f[s]))
+				dPrivate[i] += temp/(2*f[s]*(1 - f[s]))
+		with gil:
+			for k in range(n):
+				dCov[k] += dPrivate[k]
+		free(dPrivate)
 
 # Standardize posterior expectations (PCAngsd method)
 cpdef covPCAngsd(float[:,::1] L, float[::1] f, float[:,::1] P, float[:,::1] E, \
 					float[::1] dCov, int t):
 	cdef int m = L.shape[0]
 	cdef int n = L.shape[1]//2
-	cdef int i, s
+	cdef int i, j, k, s
 	cdef float p0, p1, p2, pSum, temp
-	with nogil:
-		for s in prange(m, num_threads=t):
+	cdef float* dPrivate
+	with nogil, parallel(num_threads=t):
+		dPrivate = <float*>malloc(sizeof(float)*n)
+		for j in range(n):
+			dPrivate[j] = 0.0
+		for s in prange(m):
 			for i in range(n):
 				# Update individual allele frequency
 				P[s,i] = P[s,i] + 2*f[s]
@@ -92,7 +105,11 @@ cpdef covPCAngsd(float[:,::1] L, float[::1] f, float[:,::1] P, float[:,::1] E, \
 				temp = (0 - 2*f[s])*(0 - 2*f[s])*(p0/pSum)
 				temp = temp + (1 - 2*f[s])*(1 - 2*f[s])*(p1/pSum)
 				temp = temp + (2 - 2*f[s])*(2 - 2*f[s])*(p2/pSum)
-				dCov[i] = dCov[i] + temp/(2*f[s]*(1 - f[s]))
+				dPrivate[i] += temp/(2*f[s]*(1 - f[s]))
+		with gil:
+			for k in range(n):
+				dCov[k] += dPrivate[k]
+		free(dPrivate)
 
 # Standardize posterior expectations for selection
 cpdef updateSelection(float[:,::1] L, float[::1] f, float[:,::1] P, \
