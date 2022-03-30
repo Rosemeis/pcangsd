@@ -21,7 +21,7 @@ def extract_length(filename):
 	return int(result.split()[0])
 
 # Argparse
-parser = argparse.ArgumentParser(prog="PCAngsd")
+parser = argparse.ArgumentParser(prog="pcangsd")
 parser.add_argument("--version", action="version", version="%(prog)s 1.10")
 parser.add_argument("-b", "--beagle", metavar="FILE",
 	help="Filepath to genotype likelihoods in gzipped Beagle format from ANGSD")
