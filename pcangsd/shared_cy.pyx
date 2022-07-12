@@ -183,6 +183,6 @@ cpdef gpost(float[:,::1] L, float[:,::1] P, float[:,::1] Po, int t):
                 if p2 < 0:
                     p2 = 1e-10
                 pSum = p0 + p1 + p2
-                Po[i,3*s+0] = p0/pSum
-                Po[i,3*s+1] = p1/pSum
-                Po[i,3*s+2] = p2/pSum
+                Po[s,3*i+0] = p0/pSum
+                Po[s,3*i+1] = p1/pSum
+                Po[s,3*i+2] = p2/pSum
