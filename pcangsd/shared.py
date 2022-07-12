@@ -44,7 +44,7 @@ def callGeno(L, P, F, delta, t):
 ### Genotype calling ###
 def calcPost(L, P, F, t):
     m, n = P.shape
-    G = np.zeros((n, 3*n), dtype=dtype=np.float32) # in this function, G holds the genotype posteriors 
+    G = np.zeros((n, 3*m), dtype=np.float32) # in this function, G holds the genotype posteriors 
 
     # Calculate genotype posteriors
     if F is None:

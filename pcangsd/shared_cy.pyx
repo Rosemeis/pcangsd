@@ -175,7 +175,14 @@ cpdef gpost(float[:,::1] L, float[:,::1] P, float[:,::1] Po, int t):
                 p0 = L[s,2*i+0]*(1 - P[s,i])*(1 - P[s,i])
                 p1 = L[s,2*i+1]*2*P[s,i]*(1 - P[s,i])
                 p2 = (1.0 - L[s,2*i+0] - L[s,2*i+1])*P[s,i]*P[s,i]
+                # deal with what seems to be the occasional negative value
+                if p0 < 0:
+                    p0 = 1e-10
+                if p1 < 0:
+                    p1 = 1e-10
+                if p2 < 0:
+                    p2 = 1e-10
                 pSum = p0 + p1 + p2
-                Po[i,3*i+0] = p0/pSum
-                Po[i,3*i+1] = p1/pSum
-                Po[i,3*i+2] = p2/pSum
+                Po[i,3*s+0] = p0/pSum
+                Po[i,3*s+1] = p1/pSum
+                Po[i,3*s+2] = p2/pSum
