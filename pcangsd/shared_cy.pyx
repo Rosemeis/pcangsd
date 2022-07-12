@@ -161,3 +161,21 @@ cpdef genoInbreed(float[:,::1] L, float[:,::1] P, float[::1] F, \
                         G[s,i] = 2
                     else:
                         G[s,i] = -9
+
+# Calculate genotype posteriors
+# Po is n rows by 3*n columns
+cpdef gpost(float[:,::1] L, float[:,::1] P, float[:,::1] Po, int t):
+    cdef int m = P.shape[0]
+    cdef int n = P.shape[1]
+    cdef int i, s
+    cdef float p0, p1, p2, pSum
+    with nogil:
+        for s in prange(m, num_threads=t):
+            for i in range(n):
+                p0 = L[s,2*i+0]*(1 - P[s,i])*(1 - P[s,i])
+                p1 = L[s,2*i+1]*2*P[s,i]*(1 - P[s,i])
+                p2 = (1.0 - L[s,2*i+0] - L[s,2*i+1])*P[s,i]*P[s,i]
+                pSum = p0 + p1 + p2
+                Po[i,3*i+0] = p0/pSum
+                Po[i,3*i+1] = p1/pSum
+                Po[i,3*i+2] = p2/pSum

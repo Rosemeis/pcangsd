@@ -39,3 +39,18 @@ def callGeno(L, P, F, delta, t):
     else:
         shared_cy.genoInbreed(L, P, F, G, delta, t)
     return G
+
+
+### Genotype calling ###
+def calcPost(L, P, F, t):
+    m, n = P.shape
+    G = np.zeros((n, 3*n), dtype=dtype=np.float32) # in this function, G holds the genotype posteriors 
+
+    # Calculate genotype posteriors
+    if F is None:
+        shared_cy.gpost(L, P, G, t)
+    else:
+        #shared_cy.genoInbreed(L, P, F, G, delta, t)
+        raise Exception("Calling posteriors with inbreeding not yet implemented.")
+    return G
+

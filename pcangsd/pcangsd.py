@@ -12,6 +12,7 @@ import argparse
 import os
 import subprocess
 import sys
+import pandas as pd
 from datetime import datetime
 
 # Find length of PLINK files
@@ -73,6 +74,8 @@ parser.add_argument("--geno", metavar="FLOAT", type=float,
 	help="Call genotypes from posterior probabilities with threshold")
 parser.add_argument("--genoInbreed", metavar="FLOAT", type=float,
 	help="Call genotypes (inbreeding) from posterior probabilities with threshold")
+parser.add_argument("--post_save", action="store_true",
+	help="Write genotype posteriors (from individual allele freqs) to TSV file")
 parser.add_argument("--admix", action="store_true",
 	help="Estimate admixture proportions and ancestral allele frequencies")
 parser.add_argument("--admix_K", metavar="INT", type=int,
@@ -342,6 +345,19 @@ def main():
 		print("Saved called genotype matrix as " + str(args.out) + \
 				".geno.inbreed.npy (Binary - np.int8)\n")
 		del G, F
+
+	### Genotype Posterior calculation and write out
+	if args.post_save is not None:
+		print("Calculating and writing genotype posteriors from individual allele freqs"
+		G = shared.callGeno(L, P, None, args.threads)
+
+		# Write out genotype posteriors matrix
+		df = pd.DataFrame(G)  # make a pandas data frame out of it
+		df.to_csv(args.out + ".gpost.tsv.gz", sep="\t", compression="gzip",\
+				header = False, index = False)
+		print("Saved genotype posteriors as " + str(args.out) + \
+				".gpost.tsv.gz\n")
+		del G
 
 	### Admixture estimation ###
 	if args.admix:
