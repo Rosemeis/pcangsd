@@ -348,13 +348,15 @@ def main():
 
 	### Genotype Posterior calculation and write out
 	if args.post_save:
-		print("Calculating and writing genotype posteriors from individual allele freqs")
+		print("Calculating genotype posteriors from individual allele freqs")
 		G = shared.calcPost(L, P, None, args.threads)
-
+		#print("Converting posteriors to pandas object")
 		# Write out genotype posteriors matrix
-		df = pd.DataFrame(G)  # make a pandas data frame out of it
-		df.to_csv(args.out + ".gpost.tsv.gz", sep="\t", compression="gzip",\
-				header = False, index = False, float_format = "%.3e")
+		#df = pd.DataFrame(G)  # make a pandas data frame out of it
+		print("Writing posteriors to tsv file")
+		#df.to_csv(args.out + ".gpost.tsv.gz", sep="\t", compression="gzip", chunksize=1000000,\
+		#		header = False, index = False, float_format = "%.3e")
+		np.savetxt(fname=args.out + ".gpost.tsv.gz", X=G, fmt="%1.4e", delimiter="\t")
 		print("Saved genotype posteriors as " + str(args.out) + \
 				".gpost.tsv.gz\n")
 		del G
