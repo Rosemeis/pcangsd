@@ -12,7 +12,6 @@ import argparse
 import os
 import subprocess
 import sys
-import pandas as pd
 from datetime import datetime
 
 # Find length of PLINK files
