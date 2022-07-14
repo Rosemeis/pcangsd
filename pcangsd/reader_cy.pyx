@@ -5,8 +5,10 @@ cimport numpy as np
 from cython import boundscheck, wraparound
 from cython.parallel import prange
 from libcpp.vector cimport vector
+#from libcpp.iostrem cimport cout scientific
 from libc.string cimport strtok, strdup
 from libc.stdlib cimport atof
+from libc.stdio cimport FILE, fclose, fopen, fprintf
 
 DTYPE = np.float32
 ctypedef np.float32_t DTYPE_t
@@ -237,3 +239,29 @@ cpdef filterArrays(float[:,::1] L, float[::1] f, unsigned char[::1] mask):
                 L[c,i] = L[s,i] # Genotype likelihoods
             f[c] = f[s] # Allele frequency
             c += 1
+
+
+
+
+# Eric is going to try to put a little C-ish function here
+# for writing out the genotype posteriors
+cpdef writeBeagle(float[:,::1] Po, str beagle):
+    cdef int m = Po.shape[0]
+    cdef int n3 = Po.shape[1]
+    cdef int c = 0
+    cdef int i, s
+    #cdef FILE *outf
+    cdef FILE *pipe
+
+    #pipe = popen(str.encode("gzip - > " + beagle), "wb");
+    outf = fopen(str.encode(beagle), "wb")
+    for s in range(m):
+        for i in range(n3):
+            if i == 0:
+                fprintf(outf, "%1.4e", Po[s, i])
+            else:
+                fprintf(outf, "\t%1.4e", Po[s, i])
+            if i == n3-1:
+                fprintf(outf, "\n")
+    fclose(outf)
+
