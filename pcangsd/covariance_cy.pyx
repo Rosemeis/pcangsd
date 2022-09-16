@@ -2,7 +2,6 @@
 import numpy as np
 cimport numpy as np
 from cython.parallel import prange, parallel
-from cython import boundscheck, wraparound
 from libc.math cimport sqrt
 from libc.stdlib cimport malloc, free
 

@@ -47,8 +47,8 @@ extensions = [Extension(
 			)]
 
 setup(
-	name="PCAngsd",
-	version="1.10",
+	name="pcangsd",
+	version="1.11",
 	author="Jonas Meisner",
 	description="Framework for analyzing low depth NGS data in heterogeneous populations using PCA",
 	packages=["pcangsd"],

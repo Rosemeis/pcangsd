@@ -22,7 +22,6 @@ def extract_length(filename):
 
 # Argparse
 parser = argparse.ArgumentParser(prog="pcangsd")
-parser.add_argument("--version", action="version", version="%(prog)s 1.10")
 parser.add_argument("-b", "--beagle", metavar="FILE",
 	help="Filepath to genotype likelihoods in gzipped Beagle format from ANGSD")
 parser.add_argument("-p", "--plink", metavar="FILE-PREFIX",
@@ -111,7 +110,7 @@ def main():
 	if len(sys.argv) < 2:
 		parser.print_help()
 		sys.exit()
-	print("PCAngsd v.1.10.")
+	print("PCAngsd v1.11")
 	print("Jonas Meisner and Anders Albrechtsen.")
 	print("Using " + str(args.threads) + " thread(s).\n")
 
@@ -123,7 +122,7 @@ def main():
 	full = vars(parser.parse_args())
 	deaf = vars(parser.parse_args([]))
 	with open(args.out + ".args", "w") as f:
-		f.write("PCAngsd v.1.10\n")
+		f.write("PCAngsd v1.11\n")
 		f.write("Time: " + datetime.now().strftime("%d/%m/%Y %H:%M:%S") + "\n")
 		f.write("Directory: " + str(os.getcwd()) + "\n")
 		f.write("Options:\n")
@@ -223,7 +222,7 @@ def main():
 		f = f[:m]
 		del tmpMask
 		print("Number of sites after MAF filtering (" + str(args.minMaf) + "): " \
-	            + str(m))
+			+ str(m))
 		m = L.shape[0]
 
 	# Filtering (HWE)
@@ -241,7 +240,7 @@ def main():
 		f = f[:m]
 		del tmpMask
 		print("Number of sites after HWE filtering (" + str(args.hwe_tole) + "): " \
-				+ str(np.sum(maskHWE)))
+			+ str(np.sum(maskHWE)))
 		m = L.shape[0]
 
 	### Covariance estimation ###
@@ -255,6 +254,30 @@ def main():
 
 	# Exit for standard PCA
 	if args.iter == 0:
+		# Allow for educational purposes to use ngsF inbreeding estimation model
+		if args.inbreedSites:
+			print("Estimating per-site inbreeding cofficients and performing LRT (ngsF).")
+			P = shared.fakeFreqs(f, m, n, args.threads)
+			F, T = inbreed.inbreedSites(L, P, args.inbreed_iter, args.inbreed_tole, \
+				args.threads)
+			
+			# Save inbreeding coefficients and LRTs
+			np.save(args.out + ".inbreed.ngsf.sites", F.astype(float))
+			print("Saved per-site inbreeding coefficients as " + str(args.out) + \
+				".inbreed.ngsf.sites.npy (Binary).")
+			np.save(args.out + ".lrt.ngsf.sites", T.astype(float))
+			print("Saved likelihood ratio tests as " + str(args.out) + \
+				".lrt.ngsf.sites.npy (Binary).\n")
+		if args.inbreedSamples:
+			print("Estimating per-individual inbreeding coefficients (ngsF).")
+			P = shared.fakeFreqs(f, m, n, args.threads)
+			F = inbreed.inbreedSamples(L, P, args.inbreed_iter, args.inbreed_tole, \
+				args.threads)
+
+			# Save inbreeding coefficients
+			np.savetxt(args.out + ".inbreed.ngsf.samples", F, fmt="%.7f")
+			print("Saved per-individual inbreeding coefficients as " + str(args.out) + \
+				".inbreed.ngsf.samples (Text).\n")
 		sys.exit(0)
 
 	### Selection scan and/or SNP weights ###
@@ -298,27 +321,27 @@ def main():
 	if args.inbreedSites:
 		print("Estimating per-site inbreeding cofficients and performing LRT.")
 		F, T = inbreed.inbreedSites(L, P, args.inbreed_iter, args.inbreed_tole, \
-									args.threads)
+			args.threads)
 
 		# Save inbreeding coefficients and LRTs
 		np.save(args.out + ".inbreed.sites", F.astype(float))
 		print("Saved per-site inbreeding coefficients as " + str(args.out) + \
-				".inbreed.sites.npy (Binary).")
+			".inbreed.sites.npy (Binary).")
 		np.save(args.out + ".lrt.sites", T.astype(float))
 		print("Saved likelihood ratio tests as " + str(args.out) + \
-				".lrt.sites.npy (Binary).\n")
+			".lrt.sites.npy (Binary).\n")
 		del F, T
 
 	### Inbreeding - per-individual inbreeding coefficients ###
 	if args.inbreedSamples:
 		print("Estimating per-individual inbreeding coefficients.")
 		F = inbreed.inbreedSamples(L, P, args.inbreed_iter, args.inbreed_tole, \
-									args.threads)
+			args.threads)
 
 		# Save inbreeding coefficients
 		np.savetxt(args.out + ".inbreed.samples", F, fmt="%.7f")
 		print("Saved per-individual inbreeding coefficients as " + str(args.out) + \
-				".inbreed.samples (Text).\n")
+			".inbreed.samples (Text).\n")
 		if args.genoInbreed is None:
 			del F
 
@@ -330,7 +353,7 @@ def main():
 		# Save genotype matrix
 		np.save(args.out + ".geno", G)
 		print("Saved called genotype matrix as " + str(args.out) + \
-				".geno.npy (Binary - np.int8)\n")
+			".geno.npy (Binary - np.int8)\n")
 		del G
 
 	if args.genoInbreed is not None:
@@ -340,7 +363,7 @@ def main():
 		# Save genotype matrix
 		np.save(args.out + ".geno.inbreed", G)
 		print("Saved called genotype matrix as " + str(args.out) + \
-				".geno.inbreed.npy (Binary - np.int8)\n")
+			".geno.inbreed.npy (Binary - np.int8)\n")
 		del G, F
 
 	### Admixture estimation ###
@@ -354,33 +377,31 @@ def main():
 			print("K=" + str(a_K) + ", Alpha=" + str(args.admix_alpha) + \
 					", Batches=" + str(args.admix_batch) + ", Seed=" + str(args.admix_seed))
 			Q, F, _ = admixture.admixNMF(L, P, a_K, args.admix_alpha, args.admix_iter, \
-											args.admix_tole, args.admix_batch, \
-											args.admix_seed, True, args.threads)
+				args.admix_tole, args.admix_batch, args.admix_seed, True, args.threads)
 
 			# Save factor matrices
 			np.savetxt(args.out + ".admix." + str(a_K) + ".Q", Q, fmt="%.7f")
 			print("Saved admixture proportions as " + str(args.out) + ".admix." + \
-					str(a_K) + ".Q (Text)")
+				str(a_K) + ".Q (Text)")
 			np.save(args.out + ".admix." + str(a_K) + ".F", F.astype(float))
 			print("Saved ancestral allele frequencies proportions as " + \
 					str(args.out) + ".admix." + str(a_K) + ".F.npy (Binary)\n")
 		else:
 			print("Automatic search for best alpha with depth=" + str(args.admix_depth))
 			print("K=" + str(a_K) + ", Batches=" + \
-					str(args.admix_batch) + ", Seed=" + str(args.admix_seed))
+				str(args.admix_batch) + ", Seed=" + str(args.admix_seed))
 			Q, F, lB, aB = admixture.alphaSearch(L, P, a_K, args.admix_auto, \
-												args.admix_iter, args.admix_tole, \
-												args.admix_batch, args.admix_seed, \
-												args.admix_depth, args.threads)
+				args.admix_iter, args.admix_tole, args.admix_batch, args.admix_seed, \
+				args.admix_depth, args.threads)
 			print("Search concluded: Alpha=" + str(aB) + ", log-likelihood" + str(lB))
 
 			# Save factor matrices
 			np.savetxt(args.out + ".admix." + str(a_K) + ".Q", Q, fmt="%.7f")
 			print("Saved admixture proportions as " + str(args.out) + ".admix." + \
-					str(a_K) + ".Q (Text)")
+				str(a_K) + ".Q (Text)")
 			np.save(args.out + ".admix." + str(a_K) + ".F", F.astype(float))
 			print("Saved ancestral allele frequencies proportions as " + \
-					str(args.out) + ".admix." + str(a_K) + ".F.npy (Binary)\n")
+				str(args.out) + ".admix." + str(a_K) + ".F.npy (Binary)\n")
 		del Q, F
 
 	### Tree estimation ###
@@ -393,7 +414,7 @@ def main():
 		else:
 			sList = [str(i+1) for i in range(n)]
 		print("Constructing neighbour-joining tree based on covariance matrix " + \
-				"of individual allele frequencies.")
+			"of individual allele frequencies.")
 		C = tree.covariancePi(P, f, args.threads)
 		newick = tree.constructTree(C, sList)
 
@@ -411,7 +432,7 @@ def main():
 	if args.maf_save:
 		np.save(args.out + ".maf", f.astype(float))
 		print("Saved minor allele frequencies as " + str(args.out) + \
-				".maf.npy (Binary)\n")
+			".maf.npy (Binary)\n")
 
 	# Posterior expectation of the genotypes (dosages)
 	if args.dosage_save:
@@ -420,14 +441,14 @@ def main():
 		covariance_cy.updateDosages(L, P, E, args.threads)
 		np.save(args.out + ".dosage", E)
 		print("Saved genotype dosages as " + str(args.out) + \
-				".dosage.npy (Binary - np.float32)\n")
+			".dosage.npy (Binary - np.float32)\n")
 		del E
 
 	# Individual allele frequencies
 	if args.pi_save:
 		np.save(args.out + ".pi", P)
 		print("Saved individual allele frequencies as " + str(args.out) + \
-				".pi.npy (Binary - np.float32)\n")
+			".pi.npy (Binary - np.float32)\n")
 		del P
 
 	# Sites "boolean" vector
@@ -446,7 +467,7 @@ def main():
 			siteVec[:] = 1
 		np.savetxt(args.out + ".sites", siteVec, fmt="%i")
 		print("Saved boolean vector of sites kept after filtering as " + \
-				str(args.out) + ".sites (Text)")
+			str(args.out) + ".sites (Text)")
 
 
 

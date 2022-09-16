@@ -2,7 +2,6 @@
 import numpy as np
 cimport numpy as np
 from cython.parallel import prange
-from cython import boundscheck, wraparound
 from libc.math cimport log
 
 ##### Cython functions for admixture estimation #####
