@@ -29,7 +29,7 @@ You can create an environment through conda easily or install dependencies throu
 conda env create -f environment.yml
 
 # pip
-pip install --user -r requirements.txt
+pip3 install --user -r requirements.txt
 ```
 
 ## Install and build
