@@ -160,7 +160,7 @@ def main():
 			n = L.shape[1]//2
 		else:
 			if args.filter_sites is not None:
-				mFilter = np.genfromtxt(args.filter_sites, dtype=np.uint8)
+				mFilter = np.loadtxt(args.filter_sites, dtype=np.uint8)
 				print(f"Only loading " + \
 					f"{int(np.sum(mFilter))}/{mFilter.shape[0]} sites.")
 				if args.filter is None:
