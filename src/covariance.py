@@ -7,8 +7,8 @@ __author__ = "Jonas Meisner"
 
 # Libraries
 import numpy as np
-from pcangsd import covariance_cy
-from pcangsd import shared_cy
+from src import covariance_cy
+from src import shared_cy
 from scipy.sparse.linalg import eigsh, svds
 
 ##### PCAngsd #####
@@ -21,10 +21,10 @@ def signFlip(U, Vt):
 	return U, Vt
 
 # Estimate individual allele frequencies
-def estimatePi(E, K, P, f):
-	U, s, Vt = svds(E, k=K)
+def estimatePi(E, K, P):
+	U, S, Vt = svds(E, k=K)
 	U, Vt = signFlip(U, Vt)
-	np.dot(U, s.reshape(-1,1)*Vt, out=P)
+	np.dot(U, S.reshape(-1,1)*Vt, out=P)
 	return P, Vt
 
 ### PCAngsd iterations ###
@@ -46,19 +46,19 @@ def emPCA(L, f, e, iter, tole, t):
 
 		if iter == 0:
 			print("Returning with ngsTools covariance matrix!")
-			return C, None, None
+			return C, None, None, 0, False
 
 		# Velicer's Minimum Average Partial (MAP) Test
-		eVal, eVec = eigsh(C, k=min(n-1, 15)) # Eigendecomposition (Symmetric)
+		eVal, eVec = eigsh(C, k=min(n-1, 15)) # Eigendecomposition
 		eVal = eVal[::-1] # Sorted eigenvalues
 		eVal[eVal < 0] = 0
-		eVec = eVec[:, ::-1] # Sorted eigenvectors
+		eVec = eVec[:,::-1] # Sorted eigenvectors
 		loading = eVec*np.sqrt(eVal)
 		mapTest = np.empty(min(n-1, 15), dtype=np.float32)
 
 		# Loop over m-1 eigenvalues for MAP test (Shriner implementation)
 		for eig in range(min(n-1, 15)):
-			partcov = C - (np.dot(loading[:, 0:(eig + 1)], loading[:, 0:(eig + 1)].T))
+			partcov = C - (np.dot(loading[:,0:(eig + 1)], loading[:,0:(eig + 1)].T))
 			d = np.diag(partcov)
 
 			if (np.sum(np.isnan(d)) > 0) or (np.sum(d == 0) > 0) or (np.sum(d < 0) > 0):
@@ -69,31 +69,35 @@ def emPCA(L, f, e, iter, tole, t):
 				mapTest[eig] = (np.sum(pr**2) - n)/(n*(n - 1))
 
 		K = max([1, np.argmin(mapTest) + 1]) # Number of principal components retained
-		print("Using " + str(K) + " principal components (MAP test).")
+		print(f"Using {K} principal components (MAP test).")
 		del d, eVal, eVec, loading, mapTest, partcov
 		if 'pr' in vars():
 			del pr
 	else:
 		K = e
-		print("Using " + str(K) + " principal components (manually selected).")
+		print(f"Using {K} principal components (manually selected).")
 
 	# Estimate individual allele frequencies
 	covariance_cy.updateNormal(L, f, E, t)
-	P, Vt = estimatePi(E, K, P, f)
+	P, Vt = estimatePi(E, K, P)
 	print("Individual allele frequencies estimated (1).")
 
 	# Iterative estimation
-	for i in range(iter):
+	for it in range(iter):
 		prevV = np.copy(Vt)
 		covariance_cy.updatePCAngsd(L, f, P, E, t)
-		P, Vt = estimatePi(E, K, P, f)
+		P, Vt = estimatePi(E, K, P)
 		# Check for convergence
 		diff = shared_cy.rmse2d(Vt, prevV)
-		print("Individual allele frequencies estimated (" + \
-			str(i+2) + "). RMSE=" + str(diff))
+		print("Individual allele frequencies estimated " + \
+			f"({it+2}).\tRMSE={np.round(diff,9)}")
 		if diff < tole:
 			print("PCAngsd converged.")
+			converged = True
 			break
+		if it == (iter - 1):
+			print("PCAngsd did not converge!")
+			converged = False
 	del Vt, prevV
 
 	# Estimate final covariance matrix
@@ -102,4 +106,4 @@ def emPCA(L, f, e, iter, tole, t):
 	C = np.dot(E.T, E)/float(m)
 	np.fill_diagonal(C, dCov/float(m))
 	del E, dCov # Release memory
-	return C, P, K
+	return C, P, K, it, converged

@@ -10,7 +10,7 @@ import numpy as np
 from math import ceil
 
 # Import scripts
-from pcangsd import tree_cy
+from src import tree_cy
 
 ##### Tree estimation #####
 # Construct covariance from Pi
@@ -46,7 +46,7 @@ def constructTree(C, sList):
 		dist1 = max(0, 0.5*D0[pairA, pairB] + (1.0/(2.0*(n1 + 1 - 2)))* \
 			(Dsum[pairA] - Dsum[pairB]))
 		dist2 = max(0, D0[pairA, pairB] - dist1)
-		indIndex.append("(%s:%f, %s:%f)" % (str(i1), dist1, str(i2), dist2))
+		indIndex.append(f"({i1}:{dist1}, {i2}:{dist2})")
 
 		# Create new distance matrix
 		D = np.zeros((n1, n1), dtype=np.float32)
@@ -69,5 +69,4 @@ def constructTree(C, sList):
 		(Dsum[pairA] - Dsum[pairB]))
 	dist2 = max(0, D0[pairA, pairB] - dist1)
 	dist3 = max(0, 0.5*(D0[pairA, lastI] + D0[pairB, lastI] - D0[pairA, pairB]))
-	return "(%s:%f, %s:%f, %s:%f)" % (str(i1), dist1, str(i3), dist3, \
-		str(i2), dist2)
+	return f"({i1}:{dist1}, {i3}:{dist3}, {i2}:{dist2})"

@@ -10,11 +10,11 @@ import numpy as np
 from scipy.sparse.linalg import svds
 
 # Import scripts
-from pcangsd import shared_cy
-from pcangsd import covariance_cy
+from src import shared_cy
+from src import covariance_cy
 
 ##### Selection scans #####
-### FastPCA - Galinsky et al. ###
+# FastPCA - Galinsky et al.
 def galinskyScan(L, P, f, K, t):
 	m, n = P.shape
 	E = np.zeros((m, n), dtype=np.float32)
@@ -28,7 +28,7 @@ def galinskyScan(L, P, f, K, t):
 	del E, U
 	return D
 
-### pcadapt ###
+# pcadapt
 def pcadaptScan(L, P, f, K, t):
 	m, n = P.shape
 	E = np.zeros((m, n), dtype=np.float32)
@@ -42,7 +42,7 @@ def pcadaptScan(L, P, f, K, t):
 	del B, E, U, s, Vt
 	return Z
 
-##### SNP weights #####
+# SNP weights
 def snpWeights(L, P, f, K, t):
 	m, n = P.shape
 	E = np.zeros((m, n), dtype=np.float32)
