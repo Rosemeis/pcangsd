@@ -6,7 +6,7 @@ extensions = [
 	Extension(
 		"src.reader_cy",
 		["src/reader_cy.pyx"],
-		extra_compile_args=['-fopenmp', '-O3', '-g0', '-Wno-unreachable-code'],
+		extra_compile_args=['-fopenmp', '-g0', '-Wno-unreachable-code'],
 		extra_link_args=['-fopenmp'],
 		include_dirs=[numpy.get_include()],
 		define_macros=[('NPY_NO_DEPRECATED_API', 'NPY_1_7_API_VERSION')],
@@ -15,7 +15,7 @@ extensions = [
 	Extension(
 		"src.shared_cy",
 		["src/shared_cy.pyx"],
-		extra_compile_args=['-fopenmp', '-O3', '-g0', '-Wno-unreachable-code'],
+		extra_compile_args=['-fopenmp', '-g0', '-Wno-unreachable-code'],
 		extra_link_args=['-fopenmp'],
 		include_dirs=[numpy.get_include()],
 		define_macros=[('NPY_NO_DEPRECATED_API', 'NPY_1_7_API_VERSION')]
@@ -23,7 +23,7 @@ extensions = [
 	Extension(
 		"src.covariance_cy",
 		["src/covariance_cy.pyx"],
-		extra_compile_args=['-fopenmp', '-O3', '-g0', '-Wno-unreachable-code'],
+		extra_compile_args=['-fopenmp', '-g0', '-Wno-unreachable-code'],
 		extra_link_args=['-fopenmp'],
 		include_dirs=[numpy.get_include()],
 		define_macros=[('NPY_NO_DEPRECATED_API', 'NPY_1_7_API_VERSION')]
@@ -31,7 +31,7 @@ extensions = [
 	Extension(
 		"src.inbreed_cy",
 		["src/inbreed_cy.pyx"],
-		extra_compile_args=['-fopenmp', '-O3', '-g0', '-Wno-unreachable-code'],
+		extra_compile_args=['-fopenmp', '-g0', '-Wno-unreachable-code'],
 		extra_link_args=['-fopenmp'],
 		include_dirs=[numpy.get_include()],
 		define_macros=[('NPY_NO_DEPRECATED_API', 'NPY_1_7_API_VERSION')]
@@ -39,7 +39,7 @@ extensions = [
 	Extension(
 		"src.admixture_cy",
 		["src/admixture_cy.pyx"],
-		extra_compile_args=['-fopenmp', '-O3', '-g0', '-Wno-unreachable-code'],
+		extra_compile_args=['-fopenmp', '-g0', '-Wno-unreachable-code'],
 		extra_link_args=['-fopenmp'],
 		include_dirs=[numpy.get_include()],
 		define_macros=[('NPY_NO_DEPRECATED_API', 'NPY_1_7_API_VERSION')]
@@ -47,7 +47,7 @@ extensions = [
 	Extension(
 		"src.tree_cy",
 		["src/tree_cy.pyx"],
-		extra_compile_args=['-fopenmp', '-O3', '-g0', '-Wno-unreachable-code'],
+		extra_compile_args=['-fopenmp', '-g0', '-Wno-unreachable-code'],
 		extra_link_args=['-fopenmp'],
 		include_dirs=[numpy.get_include()],
 		define_macros=[('NPY_NO_DEPRECATED_API', 'NPY_1_7_API_VERSION')]
