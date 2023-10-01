@@ -11,7 +11,7 @@ import numpy as np
 from math import sqrt
 
 # Import scripts
-from src import shared_cy
+from pcangsd import shared_cy
 
 ##### Functions #####
 # Find length of PLINK files

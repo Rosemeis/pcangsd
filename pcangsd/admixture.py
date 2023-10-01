@@ -10,8 +10,8 @@ import numpy as np
 from math import ceil
 
 # Import scripts
-from src import shared_cy
-from src import admixture_cy
+from pcangsd import shared_cy
+from pcangsd import admixture_cy
 
 ##### Admixture estimation #####
 def admixNMF(L, P, K, alpha, iter, tole, batch, seed, verbose, t):

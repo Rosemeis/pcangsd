@@ -10,8 +10,8 @@ import numpy as np
 from math import sqrt
 
 # Import scripts
-from src import shared_cy
-from src import inbreed_cy
+from pcangsd import shared_cy
+from pcangsd import inbreed_cy
 
 ##### Inbreeding coefficients #####
 ### Per-site inbreeding coefficients ###

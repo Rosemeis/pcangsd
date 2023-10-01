@@ -142,13 +142,13 @@ def main():
 	from math import ceil
 
 	# Import scripts
-	from src import admixture
-	from src import covariance
-	from src import inbreed
-	from src import reader_cy
-	from src import selection
-	from src import shared
-	from src import tree
+	from pcangsd import admixture
+	from pcangsd import covariance
+	from pcangsd import inbreed
+	from pcangsd import reader_cy
+	from pcangsd import selection
+	from pcangsd import shared
+	from pcangsd import tree
 
 	# Parse data
 	if args.beagle is not None:
@@ -451,7 +451,7 @@ def main():
 
 	# Posterior expectation of the genotypes (dosages)
 	if args.dosage_save:
-		from src import covariance_cy
+		from pcangsd import covariance_cy
 		E = np.zeros(P.shape, dtype=np.float32) # Dosage matrix
 		covariance_cy.updateDosages(L, P, E, args.threads)
 		np.save(f"{args.out}.dosage", E)

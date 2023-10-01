@@ -7,8 +7,8 @@ __author__ = "Jonas Meisner"
 
 # Libraries
 import numpy as np
-from src import covariance_cy
-from src import shared_cy
+from pcangsd import covariance_cy
+from pcangsd import shared_cy
 from scipy.sparse.linalg import eigsh, svds
 
 ##### PCAngsd #####

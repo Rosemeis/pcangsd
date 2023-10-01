@@ -10,8 +10,8 @@ import numpy as np
 from scipy.sparse.linalg import svds
 
 # Import scripts
-from src import shared_cy
-from src import covariance_cy
+from pcangsd import shared_cy
+from pcangsd import covariance_cy
 
 ##### Selection scans #####
 # FastPCA - Galinsky et al.

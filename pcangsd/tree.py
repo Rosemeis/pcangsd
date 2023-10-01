@@ -10,7 +10,7 @@ import numpy as np
 from math import ceil
 
 # Import scripts
-from src import tree_cy
+from pcangsd import tree_cy
 
 ##### Tree estimation #####
 # Construct covariance from Pi
