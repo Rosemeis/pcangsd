@@ -58,13 +58,13 @@ cpdef float vecSumSquare(float[::1] a) nogil:
 	return res
 
 # Alpha update SqS3
-cpdef void vecUpdate(float[::1] a, float[::1] d1, float[::1] d3, \
+cpdef void vecUpdate(float[::1] a, float[::1] a0, float[::1] d1, float[::1] d3, \
 		float alpha) nogil:
 	cdef:
 		int m = a.shape[0]
 		int j
 	for j in range(m):
-		a[j] = a[j] + 2*alpha*d1[j] + alpha*alpha*d3[j]
+		a[j] = a0[j] - 2*alpha*d1[j] + alpha*alpha*d3[j]
 
 # Root mean squared error (1D)
 cpdef float rmse1d(float[::1] a, float[::1] b) nogil:

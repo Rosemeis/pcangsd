@@ -41,8 +41,8 @@ def inbreedSites(L, P, iter, tole, t):
 		sv2 = shared_cy.vecSumSquare(d3)
 
 		# Alpha step
-		alpha = max(1.0, sqrt(sr2/sv2))
-		shared_cy.vecUpdate(F, d1, d3, alpha)
+		alpha = -max(1.0, sqrt(sr2/sv2))
+		shared_cy.vecUpdate(F, F0, d1, d3, alpha)
 
 		# Stabilization step and convergence check
 		inbreed_cy.inbreedSites_update(L, P, F, t)
@@ -87,8 +87,8 @@ def inbreedSamples(L, P, iter, tole, t):
 		sv2 = shared_cy.vecSumSquare(d3)
 
 		# Alpha step
-		alpha = max(1.0, sqrt(sr2/sv2))
-		shared_cy.vecUpdate(F, d1, d3, alpha)
+		alpha = -max(1.0, sqrt(sr2/sv2))
+		shared_cy.vecUpdate(F, F0, d1, d3, alpha)
 
 		# Stabilization step and convergence check
 		inbreed_cy.inbreedSamples_update(L, P, F, Ftmp, Etmp, t)
