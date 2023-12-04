@@ -1,6 +1,6 @@
 # PCAngsd
 
-**Version 1.2**
+**Version 1.21**
 
 Framework for analyzing low-depth next-generation sequencing (NGS) data in heterogeneous/structured populations using principal component analysis (PCA). Population structure is inferred by estimating individual allele frequencies in an iterative approach using a truncated SVD model. The covariance matrix is estimated using the estimated individual allele frequencies as prior information for the unobserved genotypes in low-depth NGS data.
 

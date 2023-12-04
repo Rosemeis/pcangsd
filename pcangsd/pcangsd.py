@@ -105,7 +105,7 @@ def main():
 		parser.print_help()
 		sys.exit()
 	print("-------------------------------------")
-	print("PCAngsd v1.2")
+	print("PCAngsd v1.21")
 	print("Jonas Meisner and Anders Albrechtsen.")
 	print(f"Using {args.threads} thread(s).")
 	print("-------------------------------------\n")
@@ -119,7 +119,7 @@ def main():
 	full = vars(parser.parse_args())
 	deaf = vars(parser.parse_args([]))
 	with open(args.out + ".log", "w") as log:
-		log.write("PCAngsd v1.2\n")
+		log.write("PCAngsd v1.21\n")
 		log.write(f"Time: {datetime.now().strftime('%d/%m/%Y %H:%M:%S')}\n")
 		log.write(f"Directory: {os.getcwd()}\n")
 		log.write("Options:\n")
@@ -477,9 +477,11 @@ def main():
 				siteArr = np.arange(m_old, dtype=int)[filtVec][maskMAF][maskHWE]
 				siteVec[siteArr] = 1
 			else:
-				siteVec[filtVec][maskMAF] = 1
+				siteArr = np.arange(m_old, dtype=int)[filtVec][maskMAF]
+				siteVec[siteArr] = 1
 		elif args.hwe is not None:
-			siteVec[filtVec][maskHWE] = 1
+			siteArr = np.arange(m_old, dtype=int)[filtVec][maskHWE]
+			siteVec[siteArr] = 1
 		else:
 			print("All sites have been kept.")
 			siteVec[:] = 1
