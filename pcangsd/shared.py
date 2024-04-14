@@ -8,7 +8,7 @@ __author__ = "Jonas Meisner"
 # Libraries
 import subprocess
 import numpy as np
-from math import sqrt
+from math import isclose, sqrt
 
 # Import scripts
 from pcangsd import shared_cy
@@ -45,6 +45,12 @@ def emMAF(L, iter, tole, t):
 		shared_cy.emMAF_accel(L, f1, f2, d2, t)
 		shared_cy.vecMinus(d2, d1, d3)
 		sv2 = shared_cy.vecSumSquare(d3)
+
+		# Safety break due to zero missingness
+		if isclose(sv2, 0.0):
+			f = np.copy(f2)
+			print(f"EM (MAF) converged at iteration: {it+1}")
+			break
 
 		# Alpha step
 		alpha = -max(1.0, sqrt(sr2/sv2))
