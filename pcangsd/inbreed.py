@@ -7,7 +7,7 @@ __author__ = "Jonas Meisner"
 
 # Libraries
 import numpy as np
-from math import sqrt
+from math import isclose, sqrt
 
 # Import scripts
 from pcangsd import shared_cy
@@ -40,6 +40,13 @@ def inbreedSites(L, P, iter, tole, t):
 		shared_cy.vecMinus(d2, d1, d3)
 		sv2 = shared_cy.vecSumSquare(d3)
 
+		# Safety break due to zero missingness
+		if isclose(sv2, 0.0):
+			F = np.copy(F2)
+			print(f"Inbreeding coefficients estimated ({it+1}).\tRMSE=0.0")
+			print("EM (inbreeding - sites) converged.")
+			break
+
 		# Alpha step
 		alpha = -max(1.0, sqrt(sr2/sv2))
 		shared_cy.vecUpdate(F, F0, d1, d3, alpha)
@@ -56,7 +63,7 @@ def inbreedSites(L, P, iter, tole, t):
 
 	# LRT statistic
 	inbreed_cy.loglike(L, P, F, T, t)
-	del F0
+	del F0, F1, F2, d1, d2, d3
 	return F, T
 
 ### Per-individual inbreeding coefficients ###
@@ -85,6 +92,13 @@ def inbreedSamples(L, P, iter, tole, t):
 		inbreed_cy.inbreedSamples_accel(L, P, F1, F2, d2, Ftmp, Etmp, t)
 		shared_cy.vecMinus(d2, d1, d3)
 		sv2 = shared_cy.vecSumSquare(d3)
+		
+		# Safety break due to zero missingness
+		if isclose(sv2, 0.0):
+			F = np.copy(F2)
+			print(f"Inbreeding coefficients estimated ({it+1}).\tRMSE=0.0")
+			print("EM (inbreeding - samples) converged.")
+			break
 
 		# Alpha step
 		alpha = -max(1.0, sqrt(sr2/sv2))
@@ -99,5 +113,5 @@ def inbreedSamples(L, P, iter, tole, t):
 			break
 		if it == (iter - 1):
 			print("EM (inbreeding - samples) did not converge!")
-	del F0
+	del Ftmp, Etmp, F0, F1, F2, d1, d2, d3
 	return F
