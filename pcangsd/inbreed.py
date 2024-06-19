@@ -17,15 +17,15 @@ from pcangsd import inbreed_cy
 ### Per-site inbreeding coefficients ###
 def inbreedSites(L, P, iter, tole, t):
 	m, _ = P.shape
-	F = np.zeros(m, dtype=np.float32)
-	T = np.zeros(m, dtype=np.float64)
+	F = np.zeros(m)
+	T = np.zeros(m)
 
 	# SqS3 containers
-	F1 = np.zeros(m, dtype=np.float32)
-	F2 = np.zeros(m, dtype=np.float32)
-	d1 = np.zeros(m, dtype=np.float32)
-	d2 = np.zeros(m, dtype=np.float32)
-	d3 = np.zeros(m, dtype=np.float32)
+	F1 = np.zeros(m)
+	F2 = np.zeros(m)
+	d1 = np.zeros(m)
+	d2 = np.zeros(m)
+	d3 = np.zeros(m)
 
 	# EM algorithm
 	for it in range(iter):
@@ -69,16 +69,16 @@ def inbreedSites(L, P, iter, tole, t):
 ### Per-individual inbreeding coefficients ###
 def inbreedSamples(L, P, iter, tole, t):
 	_, n = P.shape
-	F = np.zeros(n, dtype=np.float32)
-	Ftmp = np.zeros(n, dtype=np.float32)
-	Etmp = np.zeros(n, dtype=np.float32)
+	F = np.zeros(n)
+	Ftmp = np.zeros(n)
+	Etmp = np.zeros(n)
 	
 	# SqS3 containers
-	F1 = np.zeros(n, dtype=np.float32)
-	F2 = np.zeros(n, dtype=np.float32)
-	d1 = np.zeros(n, dtype=np.float32)
-	d2 = np.zeros(n, dtype=np.float32)
-	d3 = np.zeros(n, dtype=np.float32)
+	F1 = np.zeros(n)
+	F2 = np.zeros(n)
+	d1 = np.zeros(n)
+	d2 = np.zeros(n)
+	d3 = np.zeros(n)
 
 	# EM algorithm
 	for it in range(iter):

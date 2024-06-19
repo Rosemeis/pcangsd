@@ -6,7 +6,7 @@ extensions = [
 	Extension(
 		"pcangsd.reader_cy",
 		["pcangsd/reader_cy.pyx"],
-		extra_compile_args=['-fopenmp', '-g0', '-Wno-unreachable-code'],
+		extra_compile_args=['-fopenmp', '-O3', '-g0', '-Wno-unreachable-code'],
 		extra_link_args=['-fopenmp'],
 		include_dirs=[numpy.get_include()],
 		define_macros=[('NPY_NO_DEPRECATED_API', 'NPY_1_7_API_VERSION')],
@@ -15,7 +15,7 @@ extensions = [
 	Extension(
 		"pcangsd.shared_cy",
 		["pcangsd/shared_cy.pyx"],
-		extra_compile_args=['-fopenmp', '-g0', '-Wno-unreachable-code'],
+		extra_compile_args=['-fopenmp', '-O3', '-g0', '-Wno-unreachable-code'],
 		extra_link_args=['-fopenmp'],
 		include_dirs=[numpy.get_include()],
 		define_macros=[('NPY_NO_DEPRECATED_API', 'NPY_1_7_API_VERSION')]
@@ -23,7 +23,7 @@ extensions = [
 	Extension(
 		"pcangsd.covariance_cy",
 		["pcangsd/covariance_cy.pyx"],
-		extra_compile_args=['-fopenmp', '-g0', '-Wno-unreachable-code'],
+		extra_compile_args=['-fopenmp', '-O3', '-g0', '-Wno-unreachable-code'],
 		extra_link_args=['-fopenmp'],
 		include_dirs=[numpy.get_include()],
 		define_macros=[('NPY_NO_DEPRECATED_API', 'NPY_1_7_API_VERSION')]
@@ -31,7 +31,7 @@ extensions = [
 	Extension(
 		"pcangsd.inbreed_cy",
 		["pcangsd/inbreed_cy.pyx"],
-		extra_compile_args=['-fopenmp', '-g0', '-Wno-unreachable-code'],
+		extra_compile_args=['-fopenmp', '-O3', '-g0', '-Wno-unreachable-code'],
 		extra_link_args=['-fopenmp'],
 		include_dirs=[numpy.get_include()],
 		define_macros=[('NPY_NO_DEPRECATED_API', 'NPY_1_7_API_VERSION')]
@@ -39,7 +39,7 @@ extensions = [
 	Extension(
 		"pcangsd.admixture_cy",
 		["pcangsd/admixture_cy.pyx"],
-		extra_compile_args=['-fopenmp', '-g0', '-Wno-unreachable-code'],
+		extra_compile_args=['-fopenmp', '-O3', '-g0', '-Wno-unreachable-code'],
 		extra_link_args=['-fopenmp'],
 		include_dirs=[numpy.get_include()],
 		define_macros=[('NPY_NO_DEPRECATED_API', 'NPY_1_7_API_VERSION')]
@@ -47,7 +47,7 @@ extensions = [
 	Extension(
 		"pcangsd.tree_cy",
 		["pcangsd/tree_cy.pyx"],
-		extra_compile_args=['-fopenmp', '-g0', '-Wno-unreachable-code'],
+		extra_compile_args=['-fopenmp', '-O3', '-g0', '-Wno-unreachable-code'],
 		extra_link_args=['-fopenmp'],
 		include_dirs=[numpy.get_include()],
 		define_macros=[('NPY_NO_DEPRECATED_API', 'NPY_1_7_API_VERSION')]
@@ -56,7 +56,7 @@ extensions = [
 
 setup(
 	name="pcangsd",
-	version="1.21",
+	version="1.3",
 	author="Jonas Meisner",
 	description="Framework for analyzing low depth NGS data in heterogeneous populations using PCA",
 	packages=["pcangsd"],

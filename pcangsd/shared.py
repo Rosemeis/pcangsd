@@ -24,14 +24,14 @@ def extract_length(filename):
 # Estimate MAF
 def emMAF(L, iter, tole, t):
 	m = L.shape[0] # Number of sites
-	f = np.full(m, 0.25, dtype=np.float32)
+	f = np.full(m, 0.25)
 
 	# SqS3 containers
-	f1 = np.zeros(m, dtype=np.float32)
-	f2 = np.zeros(m, dtype=np.float32)
-	d1 = np.zeros(m, dtype=np.float32)
-	d2 = np.zeros(m, dtype=np.float32)
-	d3 = np.zeros(m, dtype=np.float32)
+	f1 = np.zeros(m)
+	f2 = np.zeros(m)
+	d1 = np.zeros(m)
+	d2 = np.zeros(m)
+	d3 = np.zeros(m)
 
 	# EM algorithm
 	for it in range(iter):

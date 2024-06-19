@@ -204,7 +204,7 @@ cpdef np.ndarray[DTYPE_t, ndim=2] readBeagleFilter(str beagle, \
 
 # Convert PLINK bed format to Beagle format
 cpdef void convertBed(float[:,::1] L, unsigned char[:,::1] G, int G_len, float e, \
-		int m, int n, int t) nogil:
+		int m, int n, int t) noexcept nogil:
 	cdef:
 		int i, j, b, bytepart
 		unsigned char byte, code
@@ -234,7 +234,8 @@ cpdef void convertBed(float[:,::1] L, unsigned char[:,::1] G, int G_len, float e
 					break
 
 # Array filtering
-cpdef void filterArrays(float[:,::1] L, float[::1] f, unsigned char[::1] mask) nogil:
+cpdef void filterArrays(float[:,::1] L, double[::1] f, unsigned char[::1] mask) \
+		noexcept nogil:
 	cdef:
 		int m = L.shape[0]
 		int n = L.shape[1]

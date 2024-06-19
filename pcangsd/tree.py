@@ -19,7 +19,7 @@ def covariancePi(P, f, t):
 	PiNorm = np.zeros((m, n), dtype=np.float32)
 
 	# Call functions
-	tree_cy.standardizePi(P, f, PiNorm, t)
+	tree_cy.standardizePi(P, PiNorm, f, t)
 	C = np.dot(PiNorm.T, PiNorm)/float(m)
 	del PiNorm
 	return C

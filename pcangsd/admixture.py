@@ -29,7 +29,7 @@ def admixNMF(L, P, K, alpha, iter, tole, batch, seed, verbose, t):
 	F = np.random.rand(m, K).astype(np.float32, copy=False)
 	FB = np.zeros((K, K), dtype=np.float32)
 	frob_vec = np.zeros(m, dtype=np.float32)
-	logVec = np.zeros(m, dtype=np.float64)
+	logVec = np.zeros(m)
 
 	# Batch preparation
 	m_b = ceil(float(m)/batch)

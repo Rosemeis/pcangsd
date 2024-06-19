@@ -35,12 +35,12 @@ def emPCA(L, f, e, iter, tole, t):
 	# Initiate matrices
 	E = np.zeros((m, n), dtype=np.float32)
 	P = np.zeros((m, n), dtype=np.float32)
-	dCov = np.zeros(n, dtype=np.float32)
+	dCov = np.zeros(n)
 
 	# Estimate covariance matrix (Fumagalli) and infer number of PCs
 	if (e == 0) or (iter == 0):
 		# Prepare dosages and diagonal
-		covariance_cy.covNormal(L, f, E, dCov, t)
+		covariance_cy.covNormal(L, E, f, dCov, t)
 		C = np.dot(E.T, E)/float(m)
 		np.fill_diagonal(C, dCov/float(m))
 
@@ -54,7 +54,7 @@ def emPCA(L, f, e, iter, tole, t):
 		eVal[eVal < 0] = 0
 		eVec = eVec[:,::-1] # Sorted eigenvectors
 		loading = eVec*np.sqrt(eVal)
-		mapTest = np.empty(min(n-1, 15), dtype=np.float32)
+		mapTest = np.empty(min(n-1, 15))
 
 		# Loop over m-1 eigenvalues for MAP test (Shriner implementation)
 		for eig in range(min(n-1, 15)):
@@ -78,14 +78,14 @@ def emPCA(L, f, e, iter, tole, t):
 		print(f"Using {K} principal components (manually selected).")
 
 	# Estimate individual allele frequencies
-	covariance_cy.updateNormal(L, f, E, t)
+	covariance_cy.updateNormal(L, E, f, t)
 	P, Vt = estimatePi(E, K, P)
 	print("Individual allele frequencies estimated (1).")
 
 	# Iterative estimation
 	for it in range(iter):
 		prevV = np.copy(Vt)
-		covariance_cy.updatePCAngsd(L, f, P, E, t)
+		covariance_cy.updatePCAngsd(L, P, E, f, t)
 		P, Vt = estimatePi(E, K, P)
 		# Check for convergence
 		diff = shared_cy.rmse2d(Vt, prevV)
@@ -102,7 +102,7 @@ def emPCA(L, f, e, iter, tole, t):
 
 	# Estimate final covariance matrix
 	dCov.fill(0.0)
-	covariance_cy.covPCAngsd(L, f, P, E, dCov, t)
+	covariance_cy.covPCAngsd(L, P, E, f, dCov, t)
 	C = np.dot(E.T, E)/float(m)
 	np.fill_diagonal(C, dCov/float(m))
 	del E, dCov # Release memory
