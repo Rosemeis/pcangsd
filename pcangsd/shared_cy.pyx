@@ -11,6 +11,7 @@ cpdef void emMAF_update(float[:,::1] L, double[::1] f, int t) noexcept nogil:
 		int m = L.shape[0]
 		int n = L.shape[1]//2
 		int i, j
+		double s = 1/(2*<double>n)
 		double tmp, p0, p1, p2
 	for j in prange(m, num_threads=t):
 		tmp = 0.0
@@ -19,7 +20,7 @@ cpdef void emMAF_update(float[:,::1] L, double[::1] f, int t) noexcept nogil:
 			p1 = L[j,2*i+1]*2.0*f[j]*(1.0-f[j])
 			p2 = (1.0 - L[j,2*i+0] - L[j,2*i+1])*f[j]*f[j]
 			tmp = tmp + (p1 + 2.0*p2)/(2.0*(p0 + p1 + p2))
-		f[j] = tmp/(<double>n)
+		f[j] = tmp*s
 
 # EM MAF accelerated update
 cpdef void emMAF_accel(float[:,::1] L, double[::1] f, double[::1] f_new, \
@@ -28,6 +29,7 @@ cpdef void emMAF_accel(float[:,::1] L, double[::1] f, double[::1] f_new, \
 		int m = L.shape[0]
 		int n = L.shape[1]//2
 		int i, j
+		double s = 1/(2*<double>n)
 		double tmp, p0, p1, p2
 	for j in prange(m, num_threads=t):
 		tmp = 0.0
@@ -36,7 +38,7 @@ cpdef void emMAF_accel(float[:,::1] L, double[::1] f, double[::1] f_new, \
 			p1 = L[j,2*i+1]*2.0*f[j]*(1.0-f[j])
 			p2 = (1.0 - L[j,2*i+0] - L[j,2*i+1])*f[j]*f[j]
 			tmp = tmp + (p1 + 2.0*p2)/(2.0*(p0 + p1 + p2))
-		f_new[j] = tmp/(<double>n)
+		f_new[j] = tmp*s
 		d[j] = f_new[j] - f[j]
 
 # Vector subtraction
