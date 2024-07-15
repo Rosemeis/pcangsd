@@ -11,7 +11,7 @@ cpdef void emMAF_update(float[:,::1] L, double[::1] f, int t) noexcept nogil:
 		int m = L.shape[0]
 		int n = L.shape[1]//2
 		int i, j
-		double s = 1/(2*<double>n)
+		double s = 1.0/(2.0*<double>n)
 		double tmp, p0, p1, p2
 	for j in prange(m, num_threads=t):
 		tmp = 0.0
@@ -29,7 +29,7 @@ cpdef void emMAF_accel(float[:,::1] L, double[::1] f, double[::1] f_new, \
 		int m = L.shape[0]
 		int n = L.shape[1]//2
 		int i, j
-		double s = 1/(2*<double>n)
+		double s = 1.0/(2.0*<double>n)
 		double tmp, p0, p1, p2
 	for j in prange(m, num_threads=t):
 		tmp = 0.0

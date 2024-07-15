@@ -55,6 +55,7 @@ def emMAF(L, iter, tole, t):
 		# Alpha step
 		alpha = -max(1.0, sqrt(sr2/sv2))
 		shared_cy.vecUpdate(f, f0, d1, d3, alpha)
+		np.clip(f, a_min=1e-5, a_max=1.0-(1e-5), out=f)
 
 		# Stabilization step and convergence check
 		shared_cy.emMAF_update(L, f, t)

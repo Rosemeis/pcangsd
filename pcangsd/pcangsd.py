@@ -105,7 +105,7 @@ def main():
 		parser.print_help()
 		sys.exit()
 	print("-------------------------------------")
-	print("PCAngsd v1.3")
+	print("PCAngsd v1.35")
 	print("Jonas Meisner and Anders Albrechtsen.")
 	print(f"Using {args.threads} thread(s).")
 	print("-------------------------------------\n")
@@ -119,7 +119,7 @@ def main():
 	full = vars(parser.parse_args())
 	deaf = vars(parser.parse_args([]))
 	with open(args.out + ".log", "w") as log:
-		log.write("PCAngsd v1.3\n")
+		log.write("PCAngsd v1.35\n")
 		log.write(f"Time: {datetime.now().strftime('%d/%m/%Y %H:%M:%S')}\n")
 		log.write(f"Directory: {os.getcwd()}\n")
 		log.write("Options:\n")
