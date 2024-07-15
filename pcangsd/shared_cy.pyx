@@ -19,7 +19,7 @@ cpdef void emMAF_update(float[:,::1] L, double[::1] f, int t) noexcept nogil:
 			p0 = L[j,2*i+0]*(1.0-f[j])*(1.0-f[j])
 			p1 = L[j,2*i+1]*2.0*f[j]*(1.0-f[j])
 			p2 = (1.0 - L[j,2*i+0] - L[j,2*i+1])*f[j]*f[j]
-			tmp = tmp + (p1 + 2.0*p2)/(2.0*(p0 + p1 + p2))
+			tmp = tmp + (p1 + 2.0*p2)/(p0 + p1 + p2)
 		f[j] = tmp*s
 
 # EM MAF accelerated update
@@ -37,7 +37,7 @@ cpdef void emMAF_accel(float[:,::1] L, double[::1] f, double[::1] f_new, \
 			p0 = L[j,2*i+0]*(1.0-f[j])*(1.0-f[j])
 			p1 = L[j,2*i+1]*2.0*f[j]*(1.0-f[j])
 			p2 = (1.0 - L[j,2*i+0] - L[j,2*i+1])*f[j]*f[j]
-			tmp = tmp + (p1 + 2.0*p2)/(2.0*(p0 + p1 + p2))
+			tmp = tmp + (p1 + 2.0*p2)/(p0 + p1 + p2)
 		f_new[j] = tmp*s
 		d[j] = f_new[j] - f[j]
 
