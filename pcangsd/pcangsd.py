@@ -60,8 +60,8 @@ parser.add_argument("--inbreed_samples", action="store_true",
 	help="Compute the per-individual inbreeding coefficients")
 parser.add_argument("--inbreed_iter", metavar="INT", type=int, default=500,
 	help="Maximum iterations for inbreeding coefficients estimation - EM (500)")
-parser.add_argument("--inbreed_tole", metavar="FLOAT", type=float, default=1e-6,
-	help="Tolerance for inbreeding coefficients estimation update - EM (1e-6)")
+parser.add_argument("--inbreed_tole", metavar="FLOAT", type=float, default=1e-5,
+	help="Tolerance for inbreeding coefficients estimation update - EM (1e-5)")
 parser.add_argument("--geno", metavar="FLOAT", type=float,
 	help="Call genotypes from posterior probabilities with threshold")
 parser.add_argument("--geno_inbreed", metavar="FLOAT", type=float,
@@ -79,7 +79,7 @@ parser.add_argument("--admix_batch", metavar="INT", type=int, default=10,
 parser.add_argument("--admix_alpha", metavar="FLOAT", type=float, default=0,
 	help="Alpha value for regularization in admixture estimations - NMF (0)")
 parser.add_argument("--admix_seed", metavar="INT", type=int, default=0,
-	help="Random sede used in admixture estimations - NMF (0)")
+	help="Random seed used in admixture estimations - NMF (0)")
 parser.add_argument("--admix_auto", metavar="FLOAT", type=float,
 	help="Enable automatic search for alpha by giving soft upper search bound")
 parser.add_argument("--admix_depth", metavar="INT", type=int, default=7,
