@@ -255,22 +255,22 @@ cpdef void filterArrays(float[:,::1] L, double[::1] f, unsigned char[::1] mask) 
 # A little C-ish function here
 # for writing out the genotype posteriors (Eric A.)
 cpdef void writeBeagle(float[:,::1] Po, str beagle):
-    cdef int m = Po.shape[0]
-    cdef int n3 = Po.shape[1]
-    cdef int c = 0
-    cdef int i, s
-    #cdef FILE *outf
-    cdef FILE *pipe
+	cdef int m = Po.shape[0]
+	cdef int n3 = Po.shape[1]
+	cdef int c = 0
+	cdef int i, s
+	#cdef FILE *outf
+	cdef FILE *pipe
 
-    #pipe = popen(str.encode("gzip - > " + beagle), "wb");
-    outf = fopen(str.encode(beagle), "wb")
-    for s in range(m):
-        for i in range(n3):
-            if i == 0:
-                fprintf(outf, "%1.4e", Po[s, i])
-            else:
-                fprintf(outf, "\t%1.4e", Po[s, i])
-            if i == n3-1:
-                fprintf(outf, "\n")
-    fclose(outf)
+	#pipe = popen(str.encode("gzip - > " + beagle), "wb");
+	outf = fopen(str.encode(beagle), "wb")
+	for s in range(m):
+		for i in range(n3):
+			if i == 0:
+				fprintf(outf, "%1.4e", Po[s, i])
+			else:
+				fprintf(outf, "\t%1.4e", Po[s, i])
+			if i == n3-1:
+				fprintf(outf, "\n")
+	fclose(outf)
 

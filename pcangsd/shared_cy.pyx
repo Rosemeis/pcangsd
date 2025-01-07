@@ -228,24 +228,25 @@ cpdef void freqs(float[:,::1] P, double[::1] f, int t) noexcept nogil:
 # Calculate genotype posteriors
 # Po is n rows by 3*n columns
 cpdef void gpost(float[:,::1] L, float[:,::1] P, float[:,::1] Po, int t):
-    cdef int m = P.shape[0]
-    cdef int n = P.shape[1]
-    cdef int i, s
-    cdef float p0, p1, p2, pSum
-    with nogil:
-        for s in prange(m, num_threads=t):
-            for i in range(n):
-                p0 = L[s,2*i+0]*(1 - P[s,i])*(1 - P[s,i])
-                p1 = L[s,2*i+1]*2*P[s,i]*(1 - P[s,i])
-                p2 = (1.0 - L[s,2*i+0] - L[s,2*i+1])*P[s,i]*P[s,i]
-                # deal with what seems to be the occasional negative value
-                if p0 < 0:
-                    p0 = 1e-10
-                if p1 < 0:
-                    p1 = 1e-10
-                if p2 < 0:
-                    p2 = 1e-10
-                pSum = p0 + p1 + p2
-                Po[s,3*i+0] = p0/pSum
-                Po[s,3*i+1] = p1/pSum
-                Po[s,3*i+2] = p2/pSum
+	cdef int m = P.shape[0]
+	cdef int n = P.shape[1]
+	cdef int i, s
+	cdef float p0, p1, p2, pSum
+	with nogil:
+		for s in prange(m, num_threads=t):
+			for i in range(n):
+				p0 = L[s,2*i+0]*(1 - P[s,i])*(1 - P[s,i])
+				p1 = L[s,2*i+1]*2*P[s,i]*(1 - P[s,i])
+				p2 = (1.0 - L[s,2*i+0] - L[s,2*i+1])*P[s,i]*P[s,i]
+				# deal with what seems to be the occasional negative value
+				if p0 < 0:
+					p0 = 1e-10
+				if p1 < 0:
+					p1 = 1e-10
+				if p2 < 0:
+					p2 = 1e-10
+				pSum = p0 + p1 + p2
+				Po[s,3*i+0] = p0/pSum
+				Po[s,3*i+1] = p1/pSum
+				Po[s,3*i+2] = p2/pSum
+

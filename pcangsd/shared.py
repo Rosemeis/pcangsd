@@ -74,25 +74,25 @@ def callGeno(L, P, F, delta, t):
 	m, n = P.shape
 	G = np.zeros((m, n), dtype=np.int8)
 	# Call genotypes with highest posterior probabilities
-  if F is None:
+	if F is None:
 		shared_cy.geno(L, P, G, delta, t)
-  else:
+	else:
 		shared_cy.genoInbreed(L, P, F, G, delta, t)
 
 
 ### Calculate genotype posteriors ###
 def calcPost(L, P, F, t):
-  m, n = P.shape
-  G = np.zeros((m, 3*n), dtype=np.float32) # in this function, G holds the genotype posteriors 
+	m, n = P.shape
+	G = np.zeros((m, 3*n), dtype=np.float32) # in this function, G holds the genotype posteriors 
 
-  # Call genotypes with highest posterior probabilities
-  # Calculate genotype posteriors
-  if F is None:
-    shared_cy.gpost(L, P, G, t)
-  else:
-    #shared_cy.genoInbreed(L, P, F, G, delta, t)
-    raise Exception("Calling posteriors with inbreeding not yet implemented.")
-  return G
+	# Call genotypes with highest posterior probabilities
+	# Calculate genotype posteriors
+	if F is None:
+		shared_cy.gpost(L, P, G, t)
+	else:
+		#shared_cy.genoInbreed(L, P, F, G, delta, t)
+		raise Exception("Calling posteriors with inbreeding not yet implemented.")
+	return G
 
 
 # Fake frequencies for educational purposes
