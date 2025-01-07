@@ -197,7 +197,6 @@ cpdef void genoInbreed(float[:,::1] L, float[:,::1] P, double[::1] F, \
 			p2 = (1.0 - L[j,2*i+0] - L[j,2*i+1])*(P[j,i]*P[j,i] + \
 				P[j,i]*(1.0-P[j,i])*F[i])
 			pSum = p0 + p1 + p2
-			
 			# Call maximum posterior
 			if (p0 > p1) & (p0 > p2):
 				if (p0/pSum > delta):
