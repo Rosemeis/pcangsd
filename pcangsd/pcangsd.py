@@ -96,7 +96,7 @@ parser.add_argument("--dosage_save", action="store_true",
 	help="Save genotype dosages")
 parser.add_argument("--sites_save", action="store_true",
 	help="Save boolean vector of used sites")
-parser.add_argument("--geno_posterior_save", action="store_true",
+parser.add_argument("--geno_post_save", action="store_true",
 	help="Write genotype posteriors, using indiv allele freqs as prior, to .gpost.tsv")
 
 
@@ -395,7 +395,7 @@ def main():
 		del G, F
 
 	### Genotype Posterior calculation and write out
-	if args.geno_posterior_save:
+	if args.geno_post_save:
 		print("Calculating genotype posteriors from individual allele freqs")
 		G = shared.calcPost(L, P, None, args.threads)
 		print("Writing posteriors to tsv file")
