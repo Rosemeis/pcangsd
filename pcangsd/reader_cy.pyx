@@ -236,10 +236,24 @@ cpdef void convertBed(float[:,::1] L, unsigned char[:,::1] G, int G_len, float e
 					break
 
 # Array filtering
+cpdef void filterArrays(float[:,::1] L, double[::1] f, unsigned char[::1] mask) \
+		noexcept nogil:
+	cdef:
+		int m = L.shape[0]
+		int n = L.shape[1]
+		int c = 0
+		int i, j
+	for j in range(m):
+		if mask[j] == 1:
+			for i in range(n):
+				L[c,i] = L[j,i] # Genotype likelihoods
+			f[c] = f[j] # Allele frequency
+			c += 1
 
 
-# Eric is going to try to put a little C-ish function here
-# for writing out the genotype posteriors
+
+# A little C-ish function here
+# for writing out the genotype posteriors (Eric A.)
 cpdef void writeBeagle(float[:,::1] Po, str beagle):
     cdef int m = Po.shape[0]
     cdef int n3 = Po.shape[1]
@@ -259,19 +273,4 @@ cpdef void writeBeagle(float[:,::1] Po, str beagle):
             if i == n3-1:
                 fprintf(outf, "\n")
     fclose(outf)
-
-
-cpdef void filterArrays(float[:,::1] L, double[::1] f, unsigned char[::1] mask) \
-		noexcept nogil:
-	cdef:
-		int m = L.shape[0]
-		int n = L.shape[1]
-		int c = 0
-		int i, j
-	for j in range(m):
-		if mask[j] == 1:
-			for i in range(n):
-				L[c,i] = L[j,i] # Genotype likelihoods
-			f[c] = f[j] # Allele frequency
-			c += 1
 

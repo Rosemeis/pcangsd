@@ -404,46 +404,6 @@ def main():
 				".gpost.tsv\n")
 		del G
 
-	### Admixture estimation ###
-	if args.admix:
-		print("Estimating admixture proportions using NMF (CSG-MU).")
-		if args.admix_K is not None:
-			a_K = args.admix_K
-		else:
-			a_K = K + 1
-		if args.admix_auto is None:
-			print("K=" + str(a_K) + ", Alpha=" + str(args.admix_alpha) + \
-					", Batches=" + str(args.admix_batch) + ", Seed=" + str(args.admix_seed))
-			Q, F, _ = admixture.admixNMF(L, P, a_K, args.admix_alpha, args.admix_iter, \
-											args.admix_tole, args.admix_batch, \
-											args.admix_seed, True, args.threads)
-
-			# Save factor matrices
-			np.savetxt(args.out + ".admix." + str(a_K) + ".Q", Q, fmt="%.7f")
-			print("Saved admixture proportions as " + str(args.out) + ".admix." + \
-					str(a_K) + ".Q (Text)")
-			np.save(args.out + ".admix." + str(a_K) + ".F", F.astype(float))
-			print("Saved ancestral allele frequencies proportions as " + \
-					str(args.out) + ".admix." + str(a_K) + ".F.npy (Binary)\n")
-		else:
-			print("Automatic search for best alpha with depth=" + str(args.admix_depth))
-			print("K=" + str(a_K) + ", Batches=" + \
-					str(args.admix_batch) + ", Seed=" + str(args.admix_seed))
-			Q, F, lB, aB = admixture.alphaSearch(L, P, a_K, args.admix_auto, \
-												args.admix_iter, args.admix_tole, \
-												args.admix_batch, args.admix_seed, \
-												args.admix_depth, args.threads)
-			print("Search concluded: Alpha=" + str(aB) + ", log-likelihood" + str(lB))
-
-			# Save factor matrices
-			np.savetxt(args.out + ".admix." + str(a_K) + ".Q", Q, fmt="%.7f")
-			print("Saved admixture proportions as " + str(args.out) + ".admix." + \
-					str(a_K) + ".Q (Text)")
-			np.save(args.out + ".admix." + str(a_K) + ".F", F.astype(float))
-			print("Saved ancestral allele frequencies proportions as " + \
-					str(args.out) + ".admix." + str(a_K) + ".F.npy (Binary)\n")
-		del Q, F
-
 
 	### Tree estimation ###
 	if args.tree:
