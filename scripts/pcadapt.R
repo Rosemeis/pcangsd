@@ -7,11 +7,9 @@
 #
 
 args = commandArgs(trailingOnly=TRUE)
-
-library(RcppCNPy)
 library(bigutilsr)
 
-zscores <- npyLoad(args[1])
+zscores <- read.table(args[1])[,1]
 K <- ncol(zscores)
 
 # For one component only

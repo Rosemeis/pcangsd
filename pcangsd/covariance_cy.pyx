@@ -1,144 +1,149 @@
 # cython: language_level=3, boundscheck=False, wraparound=False, initializedcheck=False, cdivision=True
 import numpy as np
 cimport numpy as np
+from cpython.mem cimport PyMem_RawCalloc, PyMem_RawFree
 from cython.parallel import prange, parallel
-from cython import boundscheck, wraparound
 from libc.math cimport sqrt
-from libc.stdlib cimport malloc, free
 
 ##### Cython functions for covariance.py ######
 # Update posterior expectations (Fumagalli method)
-cpdef updateNormal(float[:,::1] L, float[::1] f, float[:,::1] E, int t):
-	cdef int m = L.shape[0]
-	cdef int n = L.shape[1]//2
-	cdef int i, s
-	cdef float p0, p1, p2
-	with nogil:
-		for s in prange(m, num_threads=t):
-			for i in range(n):
-				# Update dosage
-				p0 = L[s,2*i+0]*(1 - f[s])*(1 - f[s])
-				p1 = L[s,2*i+1]*2*f[s]*(1 - f[s])
-				p2 = (1.0 - L[s,2*i+0] - L[s,2*i+1])*f[s]*f[s]
-				E[s,i] = (p1 + 2*p2)/(p0 + p1 + p2) - 2*f[s]
+cpdef void updateNormal(float[:,::1] L, float[:,::1] E, double[::1] f, int t) \
+		noexcept nogil:
+	cdef:
+		int m = L.shape[0]
+		int n = L.shape[1]//2
+		int i, j
+		double f1, p0, p1, p2
+	for j in prange(m, num_threads=t):
+		f1 = <double>f[j]
+		for i in range(n):
+			# Update dosage
+			p0 = L[j,2*i+0]*(1.0-f1)*(1.0-f1)
+			p1 = L[j,2*i+1]*2.0*f1*(1.0-f1)
+			p2 = (1.0 - L[j,2*i+0] - L[j,2*i+1])*f1*f1
+			E[j,i] = (p1 + 2.0*p2)/(p0 + p1 + p2) - 2.0*f1
 
 # Update posterior expectations (PCAngsd method)
-cpdef updatePCAngsd(float[:,::1] L, float[::1] f, float[:,::1] P, float[:,::1] E, int t):
-	cdef int m = L.shape[0]
-	cdef int n = L.shape[1]//2
-	cdef int i, s
-	cdef float p0, p1, p2
-	with nogil:
-		for s in prange(m, num_threads=t):
-			for i in range(n):
-				# Update individual allele frequency
-				P[s,i] = P[s,i] + 2*f[s]
-				P[s,i] = P[s,i]/2
-				P[s,i] = min(max(P[s,i], 1e-4), 1-(1e-4))
+cpdef void updatePCAngsd(float[:,::1] L, float[:,::1] P, \
+		float[:,::1] E, double[::1] f, int t) noexcept nogil:
+	cdef:
+		int m = L.shape[0]
+		int n = L.shape[1]//2
+		int i, j
+		double p0, p1, p2
+	for j in prange(m, num_threads=t):
+		for i in range(n):
+			# Update individual allele frequency
+			P[j,i] = P[j,i] + 2.0*f[j]
+			P[j,i] = P[j,i]/2.0
+			P[j,i] = min(max(P[j,i], 1e-4), 1-(1e-4))
 
-				# Center dosage
-				p0 = L[s,2*i+0]*(1 - P[s,i])*(1 - P[s,i])
-				p1 = L[s,2*i+1]*2*P[s,i]*(1 - P[s,i])
-				p2 = (1.0 - L[s,2*i+0] - L[s,2*i+1])*P[s,i]*P[s,i]
-				E[s,i] = (p1 + 2*p2)/(p0 + p1 + p2) - 2*f[s]
+			# Center dosage
+			p0 = L[j,2*i+0]*(1.0-P[j,i])*(1.0-P[j,i])
+			p1 = L[j,2*i+1]*2.0*P[j,i]*(1.0-P[j,i])
+			p2 = (1.0 - L[j,2*i+0] - L[j,2*i+1])*P[j,i]*P[j,i]
+			E[j,i] = (p1 + 2.0*p2)/(p0 + p1 + p2) - 2.0*f[j]
 
 # Standardize posterior expectations (Fumagalli method)
-cpdef covNormal(float[:,::1] L, float[::1] f, float[:,::1] E, float[::1] dCov, \
-				int t):
-	cdef int m = L.shape[0]
-	cdef int n = L.shape[1]//2
-	cdef int i, j, k, s
-	cdef float p0, p1, p2, pSum, temp
-	cdef float* dPrivate
+cpdef void covNormal(float[:,::1] L, float[:,::1] E, double[::1] f, double[::1] dCov, \
+		int t) noexcept nogil:
+	cdef:
+		int m = L.shape[0]
+		int n = L.shape[1]//2
+		int i, j, k
+		float f1, f2, p0, p1, p2, pSum, tmp
+		double* dPrivate
 	with nogil, parallel(num_threads=t):
-		dPrivate = <float*>malloc(sizeof(float)*n)
-		for j in range(n):
-			dPrivate[j] = 0.0
-		for s in prange(m):
+		dPrivate = <double*>PyMem_RawCalloc(n, sizeof(double))
+		for j in prange(m):
+			f1 = f[j]
+			f2 = 2.0*f1
 			for i in range(n):
 				# Standardize dosage
-				p0 = L[s,2*i+0]*(1 - f[s])*(1 - f[s])
-				p1 = L[s,2*i+1]*2*f[s]*(1 - f[s])
-				p2 = (1.0 - L[s,2*i+0] - L[s,2*i+1])*f[s]*f[s]
+				p0 = L[j,2*i+0]*(1.0-f1)*(1.0-f1)
+				p1 = L[j,2*i+1]*f2*(1.0-f1)
+				p2 = (1.0 - L[j,2*i+0] - L[j,2*i+1])*f1*f1
 				pSum = p0 + p1 + p2
-				E[s,i] = (p1 + 2*p2)/pSum - 2*f[s]
-				E[s,i] = E[s,i]/sqrt(2*f[s]*(1 - f[s]))
+				E[j,i] = (p1 + 2.0*p2)/pSum - f2
+				E[j,i] = E[j,i]/sqrt(f2*(1.0-f1))
 
 				# Estimate diagonal
-				temp = (0 - 2*f[s])*(0 - 2*f[s])*(p0/pSum)
-				temp = temp + (1 - 2*f[s])*(1 - 2*f[s])*(p1/pSum)
-				temp = temp + (2 - 2*f[s])*(2 - 2*f[s])*(p2/pSum)
-				dPrivate[i] += temp/(2*f[s]*(1 - f[s]))
+				tmp = (0.0-f2)*(0.0-f2)*(p0/pSum)
+				tmp = tmp + (1.0-f2)*(1.0-f2)*(p1/pSum)
+				tmp = tmp + (2.0-f2)*(2.0-f2)*(p2/pSum)
+				dPrivate[i] = dPrivate[i] + tmp/(f2*(1.0-f1))
 		with gil:
 			for k in range(n):
 				dCov[k] += dPrivate[k]
-		free(dPrivate)
+		PyMem_RawFree(dPrivate)
 
 # Standardize posterior expectations (PCAngsd method)
-cpdef covPCAngsd(float[:,::1] L, float[::1] f, float[:,::1] P, float[:,::1] E, \
-					float[::1] dCov, int t):
-	cdef int m = L.shape[0]
-	cdef int n = L.shape[1]//2
-	cdef int i, j, k, s
-	cdef float p0, p1, p2, pSum, temp
-	cdef float* dPrivate
+cpdef void covPCAngsd(float[:,::1] L, float[:,::1] P, float[:,::1] E, \
+		double[::1] f, double[::1] dCov, int t) noexcept nogil:
+	cdef:
+		int m = L.shape[0]
+		int n = L.shape[1]//2
+		int i, j, k
+		float f1, f2, p0, p1, p2, pSum, tmp
+		double* dPrivate
 	with nogil, parallel(num_threads=t):
-		dPrivate = <float*>malloc(sizeof(float)*n)
-		for j in range(n):
-			dPrivate[j] = 0.0
-		for s in prange(m):
+		dPrivate = <double*>PyMem_RawCalloc(n, sizeof(double))
+		for j in prange(m):
+			f1 = f[j]
+			f2 = 2.0*f1
 			for i in range(n):
 				# Update individual allele frequency
-				P[s,i] = P[s,i] + 2*f[s]
-				P[s,i] = P[s,i]/2
-				P[s,i] = min(max(P[s,i], 1e-4), 1-(1e-4))
+				P[j,i] = P[j,i] + f2
+				P[j,i] = P[j,i]/2
+				P[j,i] = min(max(P[j,i], 1e-4), 1-(1e-4))
 
 				# Standardize dosage
-				p0 = L[s,2*i+0]*(1 - P[s,i])*(1 - P[s,i])
-				p1 = L[s,2*i+1]*2*P[s,i]*(1 - P[s,i])
-				p2 = (1.0 - L[s,2*i+0] - L[s,2*i+1])*P[s,i]*P[s,i]
+				p0 = L[j,2*i+0]*(1.0-P[j,i])*(1.0-P[j,i])
+				p1 = L[j,2*i+1]*2.0*P[j,i]*(1.0-P[j,i])
+				p2 = (1.0 - L[j,2*i+0] - L[j,2*i+1])*P[j,i]*P[j,i]
 				pSum = p0 + p1 + p2
-				E[s,i] = (p1 + 2*p2)/pSum - 2*f[s]
-				E[s,i] = E[s,i]/sqrt(2*f[s]*(1 - f[s]))
+				E[j,i] = (p1 + 2.0*p2)/pSum - f2
+				E[j,i] = E[j,i]/sqrt(f2*(1.0-f1))
 
 				# Estimate diagonal
-				temp = (0 - 2*f[s])*(0 - 2*f[s])*(p0/pSum)
-				temp = temp + (1 - 2*f[s])*(1 - 2*f[s])*(p1/pSum)
-				temp = temp + (2 - 2*f[s])*(2 - 2*f[s])*(p2/pSum)
-				dPrivate[i] += temp/(2*f[s]*(1 - f[s]))
+				tmp = (0.0-f2)*(0.0-f2)*(p0/pSum)
+				tmp = tmp + (1.0-f2)*(1.0-f2)*(p1/pSum)
+				tmp = tmp + (2.0-f2)*(2.0-f2)*(p2/pSum)
+				dPrivate[i] = dPrivate[i] + tmp/(f2*(1.0-f1))
 		with gil:
 			for k in range(n):
 				dCov[k] += dPrivate[k]
-		free(dPrivate)
+		PyMem_RawFree(dPrivate)
 
 # Standardize posterior expectations for selection
-cpdef updateSelection(float[:,::1] L, float[::1] f, float[:,::1] P, \
-						float[:,::1] E, int t):
-	cdef int m = L.shape[0]
-	cdef int n = L.shape[1]//2
-	cdef int i, s
-	cdef float p0, p1, p2
-	with nogil:
-		for s in prange(m, num_threads=t):
-			for i in range(n):
-				# Standardize dosage
-				p0 = L[s,2*i+0]*(1 - P[s,i])*(1 - P[s,i])
-				p1 = L[s,2*i+1]*2*P[s,i]*(1 - P[s,i])
-				p2 = (1.0 - L[s,2*i+0] - L[s,2*i+1])*P[s,i]*P[s,i]
-				E[s,i] = (p1 + 2*p2)/(p0 + p1 + p2) - 2*f[s]
-				E[s,i] = E[s,i]/sqrt(2*f[s]*(1 - f[s]))
+cpdef void updateSelection(float[:,::1] L, float[:,::1] P, float[:,::1] E, \
+		double[::1] f, int t) noexcept nogil:
+	cdef:
+		int m = L.shape[0]
+		int n = L.shape[1]//2
+		int i, j
+		double p0, p1, p2
+	for j in prange(m, num_threads=t):
+		for i in range(n):
+			# Standardize dosage
+			p0 = L[j,2*i+0]*(1.0-P[j,i])*(1.0-P[j,i])
+			p1 = L[j,2*i+1]*2.0*P[j,i]*(1.0-P[j,i])
+			p2 = (1.0 - L[j,2*i+0] - L[j,2*i+1])*P[j,i]*P[j,i]
+			E[j,i] = (p1 + 2.0*p2)/(p0 + p1 + p2) - 2.0*f[j]
+			E[j,i] = E[j,i]/sqrt(2.0*f[j]*(1.0-f[j]))
 
 # Update dosages for saving
-cpdef updateDosages(float[:,::1] L, float[:,::1] P, float[:,::1] E, int t):
-	cdef int m = L.shape[0]
-	cdef int n = L.shape[1]//2
-	cdef int i, s
-	cdef float p0, p1, p2
-	with nogil:
-		for s in prange(m, num_threads=t):
-			for i in range(n):
-				# Update dosage
-				p0 = L[s,2*i+0]*(1 - P[s,i])*(1 - P[s,i])
-				p1 = L[s,2*i+1]*2*P[s,i]*(1 - P[s,i])
-				p2 = (1.0 - L[s,2*i+0] - L[s,2*i+1])*P[s,i]*P[s,i]
-				E[s,i] = (p1 + 2*p2)/(p0 + p1 + p2)
+cpdef void updateDosages(float[:,::1] L, float[:,::1] P, float[:,::1] E, int t) \
+		noexcept nogil:
+	cdef:
+		int m = L.shape[0]
+		int n = L.shape[1]//2
+		int i, j
+		double p0, p1, p2
+	for j in prange(m, num_threads=t):
+		for i in range(n):
+			# Update dosage
+			p0 = L[j,2*i+0]*(1.0-P[j,i])*(1.0-P[j,i])
+			p1 = L[j,2*i+1]*2.0*P[j,i]*(1.0-P[j,i])
+			p2 = (1.0 - L[j,2*i+0] - L[j,2*i+1])*P[j,i]*P[j,i]
+			E[j,i] = (p1 + 2.0*p2)/(p0 + p1 + p2)

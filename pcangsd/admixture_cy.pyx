@@ -2,39 +2,42 @@
 import numpy as np
 cimport numpy as np
 from cython.parallel import prange
-from cython import boundscheck, wraparound
 from libc.math cimport log
 
 ##### Cython functions for admixture estimation #####
 # Update factor matrices
-cpdef updateF(float[:,::1] F, float[:,::1] A, float[:,::1] FB):
-    cdef int m = F.shape[0]
-    cdef int K = F.shape[1]
-    cdef int s, k
-    for s in range(m):
+cpdef void updateF(float[:,::1] F, float[:,::1] A, float[:,::1] FB) noexcept nogil:
+    cdef:
+        int m = F.shape[0]
+        int K = F.shape[1]
+        int j, k
+    for j in range(m):
         for k in range(K):
-            F[s,k] = F[s,k]*A[s,k]/FB[s,k]
-            F[s,k] = min(max(F[s,k], 1e-4), 1-(1e-4))
+            F[j,k] = F[j,k]*A[j,k]/FB[j,k]
+            F[j,k] = min(max(F[j,k], 1e-4), 1-(1e-4))
 
-cpdef updateQ(float[:,::1] Q, float[:,::1] A, float[:,::1] QB, float alpha):
-    cdef int n = Q.shape[0]
-    cdef int K = Q.shape[1]
-    cdef int i, k
+cpdef void updateQ(float[:,::1] Q, float[:,::1] A, float[:,::1] QB, float alpha) \
+        noexcept nogil:
+    cdef:
+        int n = Q.shape[0]
+        int K = Q.shape[1]
+        int i, k
     for i in range(n):
         for k in range(K):
             Q[i,k] = Q[i,k]*A[i,k]/(QB[i,k] + alpha)
             Q[i,k] = min(max(Q[i,k], 1e-4), 1-(1e-4))
 
 # Log-likelihood
-cpdef loglike(float[:,::1] L, float[:,::1] X, float[::1] loglike_vec, int t):
-    cdef int m = X.shape[0]
-    cdef int n = X.shape[1]
-    cdef int i, s
-    cdef float like0, like1, like2
-    with nogil:
-        for s in prange(m, num_threads=t):
-            for i in range(n):
-                like0 = L[s,2*i+0]*(1 - X[s,i])*(1 - X[s,i])
-                like1 = L[s,2*i+1]*2*X[s,i]*(1 - X[s,i])
-                like2 = (1.0 - L[s,2*i+0] - L[s,2*i+1])*X[s,i]*X[s,i]
-                loglike_vec[s] = loglike_vec[s] + log(like0 + like1 + like2)
+cpdef void loglike(float[:,::1] L, float[:,::1] X, double[::1] logvec, int t) \
+        noexcept nogil:
+    cdef:
+        int m = X.shape[0]
+        int n = X.shape[1]
+        int i, j
+        double l0, l1, l2
+    for j in prange(m, num_threads=t):
+        for i in range(n):
+            l0 = L[j,2*i+0]*(1 - X[j,i])*(1 - X[j,i])
+            l1 = L[j,2*i+1]*2*X[j,i]*(1 - X[j,i])
+            l2 = (1.0 - L[j,2*i+0] - L[j,2*i+1])*X[j,i]*X[j,i]
+            logvec[j] = logvec[j] + log(l0 + l1 + l2)
