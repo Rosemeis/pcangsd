@@ -4,7 +4,6 @@ import numpy as np
 cimport numpy as np
 from cython.parallel import prange
 from libcpp.vector cimport vector
-#from libcpp.iostrem cimport cout scientific
 from libc.string cimport strtok, strdup
 from libc.stdlib cimport atof
 from libc.stdio cimport FILE, fclose, fopen, fprintf
@@ -254,6 +253,10 @@ cpdef void filterArrays(float[:,::1] L, double[::1] f, unsigned char[::1] mask) 
 
 # A little C-ish function here
 # for writing out the genotype posteriors (Eric A.)
+# It doesn't write a proper Beagle file, as it has no headers or
+# marker/position or allele information, but it does print out tab separated
+# genotype quantities (three columns to an individual) in the individual input
+# order of the kept sites in Po.
 cpdef void writeBeagle(float[:,::1] Po, str beagle):
 	cdef int m = Po.shape[0]
 	cdef int n3 = Po.shape[1]

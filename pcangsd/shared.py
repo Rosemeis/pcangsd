@@ -73,6 +73,7 @@ def emMAF(L, iter, tole, t):
 def callGeno(L, P, F, delta, t):
 	m, n = P.shape
 	G = np.zeros((m, n), dtype=np.int8)
+	
 	# Call genotypes with highest posterior probabilities
 	if F is None:
 		shared_cy.geno(L, P, G, delta, t)
