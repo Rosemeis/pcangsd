@@ -66,8 +66,6 @@ parser.add_argument("--geno", metavar="FLOAT", type=float,
 	help="Call genotypes from posterior probabilities with threshold")
 parser.add_argument("--geno_inbreed", metavar="FLOAT", type=float,
 	help="Call genotypes (inbreeding) from posterior probabilities with threshold")
-parser.add_argument("--post_save", action="store_true",
-	help="Write genotype posteriors (from individual allele freqs) to TSV file")
 parser.add_argument("--admix", action="store_true",
 	help="Estimate admixture proportions and ancestral allele frequencies")
 parser.add_argument("--admix_K", metavar="INT", type=int,
@@ -98,6 +96,8 @@ parser.add_argument("--dosage_save", action="store_true",
 	help="Save genotype dosages")
 parser.add_argument("--sites_save", action="store_true",
 	help="Save boolean vector of used sites")
+parser.add_argument("--geno_posterior_save", action="store_true",
+	help="Write genotype posteriors, using indiv allele freqs as prior, to .gpost.tsv")
 
 
 ##### PCAngsd #####
@@ -395,7 +395,7 @@ def main():
 		del G, F
 
 	### Genotype Posterior calculation and write out
-	if args.post_save:
+	if args.geno_posterior_save:
 		print("Calculating genotype posteriors from individual allele freqs")
 		G = shared.calcPost(L, P, None, args.threads)
 		print("Writing posteriors to tsv file")
