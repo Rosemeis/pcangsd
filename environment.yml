@@ -1,8 +1,9 @@
 name: pcangsd
-channels:
-    - defaults
 dependencies:
-    - python
-    - numpy
-    - scipy
-    - cython
+  - python>=3.10
+  - cython>3.0.0
+  - numpy>2.0.0
+  - scipy>1.14.0
+  - pip
+  - pip:
+    - pcangsd

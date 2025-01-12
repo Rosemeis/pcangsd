@@ -56,19 +56,28 @@ extensions = [
 
 setup(
 	name="pcangsd",
-	version="1.35",
+	version="1.36.0",
 	author="Jonas Meisner",
+	author_email="meisnerucph@gmail.com",
 	description="Framework for analyzing low depth NGS data in heterogeneous populations using PCA",
+	long_description_content_type="text/markdown",
+	long_description=open("README.md").read(),
+	url="https://github.com/Rosemeis/pcangsd",
+	classifiers=[
+        "Programming Language :: Python :: 3",
+        "License :: OSI Approved :: GNU General Public License v3 (GPLv3)",
+        "Operating System :: OS Independent",
+        "Development Status :: 4 - Beta",
+    ],
+	ext_modules=cythonize(extensions),
+	python_requires=">=3.10",
+	install_requires=[
+		"cython>3.0.0",
+		"numpy>2.0.0",
+		"scipy>1.14.0"
+	],
 	packages=["pcangsd"],
 	entry_points={
-		"console_scripts": ["pcangsd=pcangsd.pcangsd:main"]
+		"console_scripts": ["pcangsd=pcangsd.main:main"]
 	},
-	python_requires=">=3.6",
-	install_requires=[
-		'numpy',
-		'cython',
-		'scipy'
-    ],
-    ext_modules=cythonize(extensions, compiler_directives={'language_level':'3'}),
-    include_dirs=[numpy.get_include()]
 )

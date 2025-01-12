@@ -1,231 +1,186 @@
 # cython: language_level=3, boundscheck=False, wraparound=False, initializedcheck=False, cdivision=True
 import numpy as np
 cimport numpy as np
-from cpython.mem cimport PyMem_RawCalloc, PyMem_RawFree
 from cython.parallel import prange, parallel
 from libc.math cimport log
+from libc.stdlib cimport calloc, free
 
 ##### Cython functions for inbreed.py #####
 # Per-site
-cpdef void inbreedSites_update(float[:,::1] L, float[:,::1] P, double[::1] F, int t) \
-		noexcept nogil:
+cpdef void inbreedSites_update(const float[:,::1] L, const float[:,::1] P, \
+		double[::1] F) noexcept nogil:
 	cdef:
-		int m = P.shape[0]
-		int n = P.shape[1]
-		int i, j
-		double expH, obsH, p0, p1, p2, pSum, \
-			tmp0, tmp1, tmp2, tmpSum, Fadj
-	for j in prange(m, num_threads=t):
+		size_t M = P.shape[0]
+		size_t N = P.shape[1]
+		size_t i, j
+		double expH, obsH, p0, p1, p2, pSum, Fj, Pi
+	for j in prange(M):
+		Fj = F[j]
 		expH = 0.0
 		obsH = 0.0
-		for i in range(n):
-			Fadj = (1.0-P[j,i])*P[j,i]*F[j]
-			p0 = max(1e-4, (1.0-P[j,i])*(1.0-P[j,i]) + Fadj)
-			p1 = max(1e-4, 2.0*P[j,i]*(1.0-P[j,i]) - 2.0*Fadj)
-			p2 = max(1e-4, P[j,i]*P[j,i] + Fadj)
-			pSum = p0 + p1 + p2
+		for i in range(N):
+			Pi = P[j,i]
+			p0 = max(1e-4, (1.0 - Pi)*(1.0 - Pi) + Pi*(1.0 - Pi)*Fj)
+			p1 = max(1e-4, 2.0*Pi*(1.0 - Pi)*(1.0 - Fj))
+			p2 = max(1e-4, Pi*Pi + Pi*(1.0 - Pi)*Fj)
+			pSum = 1.0/(p0 + p1 + p2)
 
-			# Readjust distribution
-			p0 = p0/pSum
-			p1 = p1/pSum
-			p2 = p2/pSum
-
-			# Posterior
-			tmp0 = L[j,2*i+0]*p0
-			tmp1 = L[j,2*i+1]*p1
-			tmp2 = (1.0 - L[j,2*i+0] - L[j,2*i+1])*p2
-			tmpSum = tmp0 + tmp1 + tmp2
-
-			# Sum over individuals
-			obsH = obsH + tmp1/tmpSum
+			# Readjust distribution and estimate posterior
+			p0 = p0*pSum*L[j,2*i]
+			p1 = p1*pSum*L[j,2*i+1]
+			p2 = p2*pSum*(1.0 - L[j,2*i] - L[j,2*i+1])
 
 			# Count heterozygotes
-			expH = expH + 2.0*P[j,i]*(1.0-P[j,i])
+			obsH = obsH + p1/(p0 + p1 + p2)
+			expH = expH + 2.0*Pi*(1.0 - Pi)
 
-		# ANGSD procedure
-		obsH = max(1e-4, obsH/<double>(n))
-
-		# Update the inbreeding coefficient
-		F[j] = 1 - (n*obsH/expH)
-		F[j] = min(max(-1.0, F[j]), 1.0)
+		# Update inbreeding coefficient
+		F[j] = min(max(-1.0, 1.0 - (obsH/expH)), 1.0)
 
 # Per-site accelerated update
-cpdef void inbreedSites_accel(float[:,::1] L, float[:,::1] P, double[::1] F, \
-		double[::1] F_new, double[::1] d, int t) noexcept nogil:
+cpdef void inbreedSites_accel(const float[:,::1] L, const float[:,::1] P, \
+		const double[::1] F, double[::1] F_new) noexcept nogil:
 	cdef:
-		int m = P.shape[0]
-		int n = P.shape[1]
-		int i, j
-		double expH, obsH, p0, p1, p2, pSum, \
-			tmp0, tmp1, tmp2, tmpSum, Fadj
-	for j in prange(m, num_threads=t):
+		size_t M = P.shape[0]
+		size_t N = P.shape[1]
+		size_t i, j
+		double expH, obsH, p0, p1, p2, pSum, Fj, Pi
+	for j in prange(M):
+		Fj = F[j]
 		expH = 0.0
 		obsH = 0.0
-		for i in range(n):
-			Fadj = (1.0-P[j,i])*P[j,i]*F[j]
-			p0 = max(1e-4, (1.0-P[j,i])*(1.0-P[j,i]) + Fadj)
-			p1 = max(1e-4, 2.0*P[j,i]*(1.0-P[j,i]) - 2.0*Fadj)
-			p2 = max(1e-4, P[j,i]*P[j,i] + Fadj)
-			pSum = p0 + p1 + p2
+		for i in range(N):
+			Pi = P[j,i]
+			p0 = max(1e-4, (1.0 - Pi)*(1.0 - Pi) + Pi*(1.0 - Pi)*Fj)
+			p1 = max(1e-4, 2.0*Pi*(1.0 - Pi)*(1.0 - Fj))
+			p2 = max(1e-4, Pi*Pi + Pi*(1.0 - Pi)*Fj)
+			pSum = 1.0/(p0 + p1 + p2)
 
-			# Readjust distribution
-			p0 = p0/pSum
-			p1 = p1/pSum
-			p2 = p2/pSum
-
-			# Posterior
-			tmp0 = L[j,2*i+0]*p0
-			tmp1 = L[j,2*i+1]*p1
-			tmp2 = (1.0 - L[j,2*i+0] - L[j,2*i+1])*p2
-			tmpSum = tmp0 + tmp1 + tmp2
-
-			# Sum over individuals
-			obsH = obsH + tmp1/tmpSum
+			# Readjust distribution and estimate posterior
+			p0 = p0*pSum*L[j,2*i]
+			p1 = p1*pSum*L[j,2*i+1]
+			p2 = p2*pSum*(1.0 - L[j,2*i] - L[j,2*i+1])
 
 			# Count heterozygotes
-			expH = expH + 2.0*P[j,i]*(1.0-P[j,i])
+			obsH = obsH + p1/(p0 + p1 + p2)
+			expH = expH + 2.0*Pi*(1.0 - Pi)
 
-		# ANGSD procedure
-		obsH = max(1e-4, obsH/<double>(n))
-
-		# Update the inbreeding coefficient
-		F_new[j] = 1 - (n*obsH/expH)
-		F_new[j] = min(max(-1.0, F_new[j]), 1.0)
-		d[j] = F_new[j] - F[j]
+		# Update inbreeding coefficient
+		F_new[j] = min(max(-1.0, 1.0 - (obsH/expH)), 1.0)
 
 # Log-likelihoods
-cpdef void loglike(float[:,::1] L, float[:,::1] P, double[::1] F, double[::1] T, \
-		int t) noexcept nogil:
+cpdef void loglike(const float[:,::1] L, const float[:,::1] P, const double[::1] F, \
+		double[::1] T) noexcept nogil:
 	cdef:
-		int m = P.shape[0]
-		int n = P.shape[1]
-		int i, j
-		double l0, l1, l2, logAlt, logNull, p0, p1, p2, pSum, Fadj
-	for j in prange(m, num_threads=t):
-		logAlt = 0.0
-		logNull = 0.0
-		for i in range(n):
-			### Alternative model
-			Fadj = (1.0-P[j,i])*P[j,i]*F[j]
-			p0 = max(1e-4, (1.0-P[j,i])*(1.0-P[j,i]) + Fadj)
-			p1 = max(1e-4, 2.0*P[j,i]*(1.0-P[j,i]) - 2.0*Fadj)
-			p2 = max(1e-4, P[j,i]*P[j,i] + Fadj)
-			pSum = p0 + p1 + p2
+		size_t M = P.shape[0]
+		size_t N = P.shape[1]
+		size_t i, j
+		double l0, l1, l2, logA, logN, p0, p1, p2, pSum, Fj, Pi
+	for j in prange(M):
+		Fj = F[j]
+		logA = 0.0
+		logN = 0.0
+		for i in range(N):
+			Pi = P[j,i]
 
-			# Readjust distribution
-			p0 = p0/pSum
-			p1 = p1/pSum
-			p2 = p2/pSum
+			# Alternative model
+			p0 = max(1e-4, (1.0 - Pi)*(1.0 - Pi) + Pi*(1.0 - Pi)*Fj)
+			p1 = max(1e-4, 2.0*Pi*(1.0 - Pi)*(1.0 - Fj))
+			p2 = max(1e-4, Pi*Pi + Pi*(1.0 - Pi)*Fj)
+			pSum = 1.0/(p0 + p1 + p2)
 
-			# Likelihood*prior
-			l0 = L[j,2*i+0]*p0
-			l1 = L[j,2*i+1]*p1
-			l2 = (1.0 - L[j, 2*i+0] - L[j, 2*i+1])*p2
-			logAlt = logAlt + log(l0 + l1 + l2)
+			# Readjust distribution and posterior
+			p0 = p0*pSum*L[j,2*i]
+			p1 = p1*pSum*L[j,2*i+1]
+			p2 = p2*pSum*(1.0 - L[j,2*i] - L[j,2*i+1])
+			logA = logA + log(p0 + p1 + p2)
 
-			### Null model
-			l0 = L[j,2*i+0]*(1.0-P[j,i])*(1.0-P[j,i])
-			l1 = L[j,2*i+1]*2.0*P[j,i]*(1.0-P[j,i])
-			l2 = (1.0 - L[j,2*i+0] - L[j,2*i+1])*P[j,i]*P[j,i]
-			logNull = logNull + log(l0 + l1 + l2)
-		T[j] = 2.0*(logAlt - logNull)
+			# Null model
+			l0 = L[j,2*i]*(1.0 - Pi)*(1.0 - Pi)
+			l1 = L[j,2*i+1]*2.0*Pi*(1.0 - Pi)
+			l2 = (1.0 - L[j,2*i] - L[j,2*i+1])*Pi*Pi
+			logN = logN + log(l0 + l1 + l2)
+		T[j] = 2.0*(logA - logN)
 
-# Per-individual
-cpdef void inbreedSamples_update(float[:,::1] L, float[:,::1] P, double[::1] F, \
-		double[::1] Ftmp, double[::1] Etmp, int t) noexcept nogil:
+# Per-sample
+cpdef void inbreedSamples_update(const float[:,::1] L, const float[:,::1] P, \
+		double[::1] F, double[::1] Ftmp, double[::1] Etmp) noexcept nogil:
 	cdef:
-		int m = P.shape[0]
-		int n = P.shape[1]
-		int h, i, j, k, l
-		double Fadj, p0, p1, p2, pSum, tmp0, tmp1, tmp2, tmpSum
+		size_t M = P.shape[0]
+		size_t N = P.shape[1]
+		size_t h, i, j, k, l
+		double p0, p1, p2, pSum, Pi
 		double* obsH
 		double* expH
-	for h in range(n):
+	for h in range(N):
 		Ftmp[h] = 0.0
 		Etmp[h] = 0.0
-	with nogil, parallel(num_threads=t):
-		obsH = <double*>PyMem_RawCalloc(n, sizeof(double))
-		expH = <double*>PyMem_RawCalloc(n, sizeof(double))
-		for j in prange(m):
-			for i in range(n):
-				Fadj = (1.0-P[j,i])*P[j,i]*F[i]
-				p0 = max(1e-4, (1.0-P[j,i])*(1.0-P[j,i]) + Fadj)
-				p1 = max(1e-4, 2.0*P[j,i]*(1.0-P[j,i]) - 2.0*Fadj)
-				p2 = max(1e-4, P[j,i]*P[j,i] + Fadj)
-				pSum = p0 + p1 + p2
+	with nogil, parallel():
+		obsH = <double*>calloc(N, sizeof(double))
+		expH = <double*>calloc(N, sizeof(double))
+		for j in prange(M):
+			for i in range(N):
+				Pi = P[j,i]
+				p0 = max(1e-4, (1.0 - Pi)*(1.0 - Pi) + Pi*(1.0 - Pi)*F[i])
+				p1 = max(1e-4, 2.0*Pi*(1.0 - Pi)*(1.0 - F[i]))
+				p2 = max(1e-4, Pi*Pi + Pi*(1.0 - Pi)*F[i])
+				pSum = 1.0/(p0 + p1 + p2)
 
-				# Readjust distribution
-				p0 = p0/pSum
-				p1 = p1/pSum
-				p2 = p2/pSum
-				
-				# Posterior
-				tmp0 = L[j,2*i+0]*p0
-				tmp1 = L[j,2*i+1]*p1
-				tmp2 = (1.0 - L[j,2*i+0] - L[j,2*i+1])*p2
-				tmpSum = tmp0 + tmp1 + tmp2
-
-				# Sum over individuals
-				obsH[i] = obsH[i] + tmp1/tmpSum
+				# Readjust distribution and estimate posterior
+				p0 = p0*pSum*L[j,2*i]
+				p1 = p1*pSum*L[j,2*i+1]
+				p2 = p2*pSum*(1.0 - L[j,2*i] - L[j,2*i+1])
 
 				# Count heterozygotes
-				expH[i] = expH[i] + 2.0*P[j,i]*(1.0-P[j,i])
+				obsH[i] += p1/(p0 + p1 + p2)
+				expH[i] += 2.0*Pi*(1.0 - Pi)
 		with gil:
-			for k in range(n):
+			for k in range(N):
 				Ftmp[k] += obsH[k]
 				Etmp[k] += expH[k]
-		PyMem_RawFree(obsH)
-		PyMem_RawFree(expH)
-	for l in range(n):
-		F[l] = 1.0 - Ftmp[l]/Etmp[l]
+		free(obsH)
+		free(expH)
+	for l in range(N):
+		F[l] = min(max(-1.0, 1.0 - (Ftmp[l]/Etmp[l])), 1.0)
 
-# Per-individual accelerated update
-cpdef void inbreedSamples_accel(float[:,::1] L, float[:,::1] P, double[::1] F, \
-		double[::1] F_new, double[::1] d, double[::1] Ftmp, double[::1] Etmp, int t) \
+# Per-sample accelerated update
+cpdef void inbreedSamples_accel(const float[:,::1] L, const float[:,::1] P, \
+		const double[::1] F, double[::1] F_new, double[::1] Ftmp, double[::1] Etmp) \
 		noexcept nogil:
 	cdef:
-		int m = P.shape[0]
-		int n = P.shape[1]
-		int h, i, j, k, l
-		double Fadj, p0, p1, p2, pSum, tmp0, tmp1, tmp2, tmpSum
+		size_t M = P.shape[0]
+		size_t N = P.shape[1]
+		size_t h, i, j, k, l
+		double p0, p1, p2, pSum, Pi
 		double* obsH
 		double* expH
-	for h in range(n):
+	for h in range(N):
 		Ftmp[h] = 0.0
 		Etmp[h] = 0.0
-	with nogil, parallel(num_threads=t):
-		obsH = <double*>PyMem_RawCalloc(n, sizeof(double))
-		expH = <double*>PyMem_RawCalloc(n, sizeof(double))
-		for j in prange(m):
-			for i in range(n):
-				Fadj = (1.0-P[j,i])*P[j,i]*F[i]
-				p0 = max(1e-4, (1.0-P[j,i])*(1.0-P[j,i]) + Fadj)
-				p1 = max(1e-4, 2.0*P[j,i]*(1.0-P[j,i]) - 2.0*Fadj)
-				p2 = max(1e-4, P[j,i]*P[j,i] + Fadj)
-				pSum = p0 + p1 + p2
+	with nogil, parallel():
+		obsH = <double*>calloc(N, sizeof(double))
+		expH = <double*>calloc(N, sizeof(double))
+		for j in prange(M):
+			for i in range(N):
+				Pi = P[j,i]
+				p0 = max(1e-4, (1.0 - Pi)*(1.0 - Pi) + Pi*(1.0 - Pi)*F[i])
+				p1 = max(1e-4, 2.0*Pi*(1.0 - Pi)*(1.0 - F[i]))
+				p2 = max(1e-4, Pi*Pi + Pi*(1.0 - Pi)*F[i])
+				pSum = 1.0/(p0 + p1 + p2)
 
-				# Readjust distribution
-				p0 = p0/pSum
-				p1 = p1/pSum
-				p2 = p2/pSum
-				
-				# Posterior
-				tmp0 = L[j,2*i+0]*p0
-				tmp1 = L[j,2*i+1]*p1
-				tmp2 = (1.0 - L[j,2*i+0] - L[j,2*i+1])*p2
-				tmpSum = tmp0 + tmp1 + tmp2
-
-				# Sum over individuals
-				obsH[i] = obsH[i] + tmp1/tmpSum
+				# Readjust distribution and estimate posterior
+				p0 = p0*pSum*L[j,2*i]
+				p1 = p1*pSum*L[j,2*i+1]
+				p2 = p2*pSum*(1.0 - L[j,2*i] - L[j,2*i+1])
 
 				# Count heterozygotes
-				expH[i] = expH[i] + 2.0*P[j,i]*(1.0-P[j,i])
+				obsH[i] += p1/(p0 + p1 + p2)
+				expH[i] += 2.0*Pi*(1.0 - Pi)
 		with gil:
-			for k in range(n):
+			for k in range(N):
 				Ftmp[k] += obsH[k]
 				Etmp[k] += expH[k]
-		PyMem_RawFree(obsH)
-		PyMem_RawFree(expH)
-	for l in range(n):
-		F_new[l] = 1.0 - Ftmp[l]/Etmp[l]
-		d[l] = F_new[l] - F[l]
+		free(obsH)
+		free(expH)
+	for l in range(N):
+		F_new[l] = min(max(-1.0, 1.0 - (Ftmp[l]/Etmp[l])), 1.0)

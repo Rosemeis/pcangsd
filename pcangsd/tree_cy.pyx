@@ -6,52 +6,59 @@ from libc.math cimport sqrt
 
 ##### Cython functions for tree estimation #####
 # Standardize individual allele frequencies
-cpdef void standardizePi(float[:,::1] P, float[:,::1] PiNorm, double[::1] f, int t) \
+cpdef void standardizePi(const float[:,::1] P, float[:,::1] Pi, const double[::1] f) \
 		noexcept nogil:
 	cdef:
-		int m = P.shape[0]
-		int n = P.shape[1]
-		int i, j
-	for j in prange(m, num_threads=t):
-		for i in range(n):
-			PiNorm[j,i] = P[j,i] - f[j]
-			PiNorm[j,i] = PiNorm[j,i]/sqrt(f[j]*(1 - f[j]))
+		size_t M = P.shape[0]
+		size_t N = P.shape[1]
+		size_t i, j
+		float s
+	for j in prange(M):
+		s = 1.0/sqrt(f[j]*(1.0 - f[j]))
+		for i in range(N):
+			Pi[j,i] = (P[j,i] - f[j])*s
 
 # Estimate distance matrix based on covariance matrix
-cpdef void estimateDist(float[:,::1] C, float[:,::1] D) noexcept nogil:
+cpdef void estimateD(const float[:,::1] C, float[:,::1] D) noexcept nogil:
 	cdef:
-		int n = C.shape[0]
-		int i, j
-	for i in range(n):
-		for j in range(n):
-			D[i,j] = max(0, C[i,i] + C[j,j] - 2*C[i,j])
+		size_t N = C.shape[0]
+		size_t i, j
+		float ci
+	for i in range(N):
+		ci = C[i,i]
+		for j in range(N):
+			D[i,j] = max(0, ci + C[j,j] - 2.0*C[i,j])
 
 # Estimate Q-matrix
-cpdef void estimateQ(float[:,::1] D, float[:,::1] Q, float[::1] Dsum) noexcept nogil:
+cpdef void estimateQ(const float[:,::1] D, float[:,::1] Q, const float[::1] D_sum) \
+		noexcept nogil:
 	cdef:
-		int n = D.shape[0]
-		int i, j
-	for i in range(n):
-		for j in range(n):
-			Q[i,j] = (<float>(n) - 2)*D[i,j] - Dsum[i] - Dsum[j]
+		size_t N = D.shape[0]
+		size_t i, j
+		float di
+	for i in range(N):
+		di = D_sum[i]
+		for j in range(N):
+			Q[i,j] = (<float>(N) - 2.0)*D[i,j] - di - D_sum[j]
 
-# New D-matrix
-cpdef void updateD(float[:,::1] D0, float[:,::1] D, int pA, int pB) noexcept nogil:
+# Update new distance matrix
+cpdef void updateD(const float[:,::1] D0, float[:,::1] D, const size_t pA, \
+		const size_t pB) noexcept nogil:
 	cdef:
-		int n = D0.shape[0]
-		int c = 0
-		int i, j, d
-	for i in range(n):
+		size_t N = D0.shape[0]
+		size_t c = 0
+		size_t i, j, d
+	for i in range(N):
 		if (i == pA) or (i == pB):
 			continue
 		else:
 			d = 0
-			for j in range(n):
+			for j in range(N):
 				if (j == pA) or (j == pB):
 					continue
 				else:
 					D[c,d] = D0[i,j]
-					d = d + 1
+					d += 1
 			D[c,d] = max(0, 0.5*(D0[i, pA] + D0[i, pB] - D0[pA, pB]))
 			D[d,c] = D[c,d]
-			c = c + 1
+			c += 1

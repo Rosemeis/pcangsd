@@ -5,222 +5,276 @@ from cython.parallel import prange
 from libc.math cimport sqrt
 
 ##### Shared Cython functions #####
-# EM MAF update
-cpdef void emMAF_update(float[:,::1] L, double[::1] f, int t) noexcept nogil:
+# Inline function
+cdef inline double computeC(const double* x0, const double* x1, const double* x2, \
+		const size_t I) noexcept nogil:
 	cdef:
-		int m = L.shape[0]
-		int n = L.shape[1]//2
-		int i, j
-		double s = 1.0/(2.0*<double>n)
-		double tmp, p0, p1, p2
-	for j in prange(m, num_threads=t):
+		size_t i
+		double sum1 = 0.0
+		double sum2 = 0.0
+		double u, v
+	for i in prange(I):
+		u = x1[i] - x0[i]
+		v = x2[i] - x1[i] - u
+		sum1 += u*u
+		sum2 += u*v
+	return min(max(-(sum1/sum2), 1.0), 256.0)
+
+# EM MAF update
+cpdef void emMAF_update(const float[:,::1] L, double[::1] f) noexcept nogil:
+	cdef:
+		size_t M = L.shape[0]
+		size_t N = L.shape[1]//2
+		size_t i, j
+		double s = 1.0/(2.0*<double>N)
+		double fj, p0, p1, p2, tmp
+	for j in prange(M):
+		fj = f[j]
 		tmp = 0.0
-		for i in range(n):
-			p0 = L[j,2*i+0]*(1.0-f[j])*(1.0-f[j])
-			p1 = L[j,2*i+1]*2.0*f[j]*(1.0-f[j])
-			p2 = (1.0 - L[j,2*i+0] - L[j,2*i+1])*f[j]*f[j]
+		for i in range(N):
+			p0 = L[j,2*i]*(1.0 - fj)*(1.0 - fj)
+			p1 = L[j,2*i+1]*2.0*fj*(1.0 - fj)
+			p2 = (1.0 - L[j,2*i] - L[j,2*i+1])*fj*fj
 			tmp = tmp + (p1 + 2.0*p2)/(p0 + p1 + p2)
 		f[j] = tmp*s
 
 # EM MAF accelerated update
-cpdef void emMAF_accel(float[:,::1] L, double[::1] f, double[::1] f_new, \
-		double[::1] d, int t) noexcept nogil:
+cpdef void emMAF_accel(const float[:,::1] L, const double[::1] f, double[::1] f_new) \
+		noexcept nogil:
 	cdef:
-		int m = L.shape[0]
-		int n = L.shape[1]//2
-		int i, j
-		double s = 1.0/(2.0*<double>n)
-		double tmp, p0, p1, p2
-	for j in prange(m, num_threads=t):
+		size_t M = L.shape[0]
+		size_t N = L.shape[1]//2
+		size_t i, j
+		double s = 1.0/(2.0*<double>N)
+		double fj, p0, p1, p2, tmp
+	for j in prange(M):
+		fj = f[j]
 		tmp = 0.0
-		for i in range(n):
-			p0 = L[j,2*i+0]*(1.0-f[j])*(1.0-f[j])
-			p1 = L[j,2*i+1]*2.0*f[j]*(1.0-f[j])
-			p2 = (1.0 - L[j,2*i+0] - L[j,2*i+1])*f[j]*f[j]
+		for i in range(N):
+			p0 = L[j,2*i]*(1.0 - fj)*(1.0 - fj)
+			p1 = L[j,2*i+1]*2.0*fj*(1.0 - fj)
+			p2 = (1.0 - L[j,2*i] - L[j,2*i+1])*fj*fj
 			tmp = tmp + (p1 + 2.0*p2)/(p0 + p1 + p2)
 		f_new[j] = tmp*s
-		d[j] = f_new[j] - f[j]
 
-# Vector subtraction
-cpdef void vecMinus(double[::1] a, double[::1] b, double[::1] c) noexcept nogil:
+# EM MAF QN jump
+cpdef void emMAF_alpha(double[::1] f0, const double[::1] f1, const double[::1] f2) \
+		noexcept nogil:
 	cdef:
-		int m = a.shape[0]
-		int j
-	for j in range(m):
-		c[j] = a[j] - b[j]
+		size_t I = f0.shape[0]
+		size_t i
+		double c1, c2
+	c1 = computeC(&f0[0], &f1[0], &f2[0], I)
+	c2 = 1.0 - c1
+	for i in prange(I):
+		f0[i] = min(max(c2*f1[i] + c1*f2[i], 1e-5), 1-(1e-5))
 
-# Vector sum of squares
-cpdef double vecSumSquare(double[::1] a) nogil:
+# Inbreeding QN jump
+cpdef void inbreed_alpha(double[::1] F0, const double[::1] F1, const double[::1] F2) \
+		noexcept nogil:
 	cdef:
-		int m = a.shape[0]
-		int j
-		double res = 0.0
-	for j in range(m):
-		res += a[j]*a[j]
-	return res
-
-# Alpha update SqS3
-cpdef void vecUpdate(double[::1] a, double[::1] a0, double[::1] d1, double[::1] d3, \
-		double alpha) noexcept nogil:
-	cdef:
-		int m = a.shape[0]
-		int j
-	for j in range(m):
-		a[j] = a0[j] - 2*alpha*d1[j] + alpha*alpha*d3[j]
+		size_t I = F0.shape[0]
+		size_t i
+		double c1, c2
+	c1 = computeC(&F0[0], &F1[0], &F2[0], I)
+	c2 = 1.0 - c1
+	for i in prange(I):
+		F0[i] = min(max(c2*F1[i] + c1*F2[i], -1.0), 1.0)
 
 # Root mean squared error (1D)
-cpdef double rmse1d(double[::1] a, double[::1] b) noexcept nogil:
+cpdef double rmse1d(const double[::1] a, const double[::1] b) noexcept nogil:
 	cdef:
-		int n = a.shape[0]
-		int i
+		size_t N = a.shape[0]
+		size_t i
 		double res = 0.0
-	for i in range(n):
-		res = res + (a[i] - b[i])*(a[i] - b[i])
-	res = res/(<double>n)
-	return sqrt(res)
+	for i in range(N):
+		res += (a[i] - b[i])*(a[i] - b[i])
+	return sqrt(res/(<double>N))
 
 # Root mean squared error (2D)
-cpdef double rmse2d(float[:,:] A, float[:,:] B) noexcept nogil:
+cpdef double rmse2d(const float[:,::1] A, const float[:,::1] B) noexcept nogil:
 	cdef:
-		int n = A.shape[0]
-		int m = A.shape[1]
-		int i, j
+		size_t N = A.shape[0]
+		size_t M = A.shape[1]
+		size_t i, j
 		double res = 0.0
-	for i in range(n):
-		for j in range(m):
-			res = res + (A[i,j] - B[i,j])*(A[i,j] - B[i,j])
-	res = res/(<double>(n*m))
-	return sqrt(res)
+	for i in range(N):
+		for j in range(M):
+			res += (A[i,j] - B[i,j])*(A[i,j] - B[i,j])
+	return sqrt(res/(<double>(N*M)))
 
 # Frobenius error
-cpdef double frobenius(float[:,::1] A, float[:,::1] B) noexcept nogil:
+cpdef double frobenius(const float[:,::1] A, const float[:,::1] B) noexcept nogil:
 	cdef:
-		int n = A.shape[0]
-		int m = A.shape[1]
-		int i, j
+		size_t N = A.shape[0]
+		size_t M = A.shape[1]
+		size_t i, j
 		double res = 0.0
-	for i in range(n):
-		for j in range(m):
+	for i in range(N):
+		for j in range(M):
 			res += (A[i,j] - B[i,j])*(A[i,j] - B[i,j])
 	return sqrt(res)
 
-# Frobenius error - threaded
-cpdef void frobeniusThread(float[:,::1] A, float[:,::1] B, float[::1] res_vec, \
-		int t) noexcept nogil:
+# Frobenius error (multi-threaded)
+cpdef double frobeniusMulti(const float[:,::1] A, const float[:,::1] B) noexcept nogil:
 	cdef:
-		int n = A.shape[0]
-		int m = A.shape[1]
-		int i, j
-	for i in prange(n, num_threads=t):
-		for j in range(m):
-			res_vec[i] = res_vec[i] + (A[i,j] - B[i,j])*(A[i,j] - B[i,j])
+		size_t N = A.shape[0]
+		size_t M = A.shape[1]
+		size_t i, j
+		double res = 0.0
+	for i in prange(N):
+		for j in range(M):
+			res += (A[i,j] - B[i,j])*(A[i,j] - B[i,j])
+	return sqrt(res)
 
 # FastPCA selection scan
-cpdef void computeD(float[:,:] U, float[:,::1] D) noexcept nogil:
+cpdef void computeD(const float[:,::1] U, float[:,::1] D) noexcept nogil:
 	cdef:
-		int m = U.shape[0]
-		int K = U.shape[1]
-		int j, k
-	for j in range(m):
+		size_t M = U.shape[0]
+		size_t K = U.shape[1]
+		size_t j, k
+	for j in prange(M):
 		for k in range(K):
-			D[j,k] = (U[j,k]*U[j,k])*<float>(m)
+			D[j,k] = (U[j,k]*U[j,k])*<float>(M)
 
 # pcadapt selection scan
-cpdef void computeZ(float[:,::1] E, float[:,::1] B, float[:,:] Vt, float[:,::1] Z) \
-		noexcept nogil:
+cpdef void computeZ(const float[:,::1] E, const float[:,::1] B, const float[:,::1] V, \
+		float[:,::1] Z) noexcept nogil:
 	cdef:
-		int m = E.shape[0]
-		int n = E.shape[1]
-		int K = Vt.shape[0]
-		int i, j, k
+		size_t M = E.shape[0]
+		size_t N = E.shape[1]
+		size_t K = V.shape[1]
+		size_t i, j, k
 		double rec, res
-	for j in range(m):
+	for j in range(M):
 		res = 0.0
-		for i in range(n):
+		for i in range(N):
 			rec = 0.0
 			for k in range(K):
-				rec = rec + Vt[k,i]*B[j,k]
+				rec = rec + V[i,k]*B[j,k]
 			res = res + (E[j,i] - rec)*(E[j,i] - rec)
-		res = sqrt(res/<double>(n-K))
-		if res > 0:
+		if res > 0.0:
+			res = 1.0/sqrt(res/<double>(N-K))
 			for k in range(K):
-				Z[j,k] = B[j,k]/res
+				Z[j,k] = B[j,k]*res
 		else:
 			for k in range(K):
 				Z[j,k] = 0.0
 
-# Genotype calling
-cpdef void geno(float[:,::1] L, float[:,::1] P, signed char[:,::1] G, \
-		double delta, int t) noexcept nogil:
+# Genotype posteriors based on individal allele frequencies
+cpdef void post(const float[:,::1] L, const float[:,::1] P, float[:,::1] G) \
+		noexcept nogil:
 	cdef:
-		int m = P.shape[0]
-		int n = P.shape[1]
-		int i, j
+		size_t M = P.shape[0]
+		size_t N = P.shape[1]
+		size_t i, j
 		double p0, p1, p2, pSum
-	for j in prange(m, num_threads=t):
-		for i in range(n):
-			p0 = L[j,2*i+0]*(1.0-P[j,i])*(1.0-P[j,i])
-			p1 = L[j,2*i+1]*2.0*P[j,i]*(1.0-P[j,i])
-			p2 = (1.0 - L[j,2*i+0] - L[j,2*i+1])*P[j,i]*P[j,i]
-			pSum = p0 + p1 + p2
+	for j in prange(M):
+		for i in range(N):
+			p0 = L[j,2*i]*(1.0 - P[j,i])*(1.0 - P[j,i])
+			p1 = L[j,2*i+1]*2.0*P[j,i]*(1.0 - P[j,i])
+			p2 = (1.0 - L[j,2*i] - L[j,2*i+1])*P[j,i]*P[j,i]
+			pSum = 1.0/(p0 + p1 + p2)
+
+			# Fill genotype posterior array
+			G[j,3*i] = max(1e-10, p0*pSum)
+			G[j,3*i+1] = max(1e-10, p1*pSum)
+			G[j,3*i+2] = max(1e-10, p2*pSum)
+
+# Genotype posteriors based on individal allele frequencies (inbreeding)
+cpdef void postInbreed(const float[:,::1] L, const float[:,::1] P, float[:,::1] G, \
+		const double[::1] F) noexcept nogil:
+	cdef:
+		size_t M = P.shape[0]
+		size_t N = P.shape[1]
+		size_t i, j
+		double p0, p1, p2, pSum
+	for j in prange(M):
+		for i in range(N):
+			p0 = L[j,2*i]*((1.0 - P[j,i])*(1.0 - P[j,i]) + P[j,i]*(1.0 - P[j,i])*F[i])
+			p1 = L[j,2*i+1]*2.0*P[j,i]*(1.0 - P[j,i])
+			p2 = (1.0 - L[j,2*i] - L[j,2*i+1])*(P[j,i]*P[j,i] + \
+				P[j,i]*(1.0 - P[j,i])*F[i])
+			pSum = 1.0/(p0 + p1 + p2)
+
+			# Fill genotype posterior array
+			G[j,3*i] = max(1e-10, p0*pSum)
+			G[j,3*i+1] = max(1e-10, p1*pSum)
+			G[j,3*i+2] = max(1e-10, p2*pSum)
+
+# Genotype calling
+cpdef void geno(const float[:,::1] L, const float[:,::1] P, signed char[:,::1] G, \
+		const double delta) noexcept nogil:
+	cdef:
+		size_t M = P.shape[0]
+		size_t N = P.shape[1]
+		size_t i, j
+		double p0, p1, p2, pSum
+	for j in prange(M):
+		for i in range(N):
+			p0 = L[j,2*i]*(1.0 - P[j,i])*(1.0 - P[j,i])
+			p1 = L[j,2*i+1]*2.0*P[j,i]*(1.0 - P[j,i])
+			p2 = (1.0 - L[j,2*i] - L[j,2*i+1])*P[j,i]*P[j,i]
+			pSum = 1.0/(p0 + p1 + p2)
 
 			# Call posterior maximum
 			if (p0 > p1) & (p0 > p2):
-				if (p0/pSum > delta):
+				if (p0*pSum > delta):
 					G[j,i] = 0
 				else:
 					G[j,i] = -9
 			elif (p1 > p2):
-				if (p1/pSum > delta):
+				if (p1*pSum > delta):
 					G[j,i] = 1
 				else:
 					G[j,i] = -9
 			else:
-				if (p2/pSum > delta):
+				if (p2*pSum > delta):
 					G[j,i] = 2
 				else:
 					G[j,i] = -9
 
 # Genotype calling (inbreeding)
-cpdef void genoInbreed(float[:,::1] L, float[:,::1] P, double[::1] F, \
-		signed char[:,::1] G, double delta, int t) noexcept nogil:
+cpdef void genoInbreed(const float[:,::1] L, const float[:,::1] P, const double[::1] F, \
+		signed char[:,::1] G, const double delta) noexcept nogil:
 	cdef:
-		int m = P.shape[0]
-		int n = P.shape[1]
-		int i, j
+		size_t M = P.shape[0]
+		size_t N = P.shape[1]
+		size_t i, j
 		double p0, p1, p2, pSum
-	for j in prange(m, num_threads=t):
-		for i in range(n):
-			p0 = L[j,2*i+0]*((1.0-P[j,i])*(1.0-P[j,i]) + \
-				P[j,i]*(1.0-P[j,i])*F[i])
-			p1 = L[j,2*i+1]*2.0*P[j,i]*(1.0-P[j,i])
-			p2 = (1.0 - L[j,2*i+0] - L[j,2*i+1])*(P[j,i]*P[j,i] + \
-				P[j,i]*(1.0-P[j,i])*F[i])
-			pSum = p0 + p1 + p2
+	for j in prange(M):
+		for i in range(N):
+			p0 = L[j,2*i]*((1.0 - P[j,i])*(1.0 - P[j,i]) + P[j,i]*(1.0 - P[j,i])*F[i])
+			p1 = L[j,2*i+1]*2.0*P[j,i]*(1.0 - P[j,i])
+			p2 = (1.0 - L[j,2*i] - L[j,2*i+1])*(P[j,i]*P[j,i] + \
+				P[j,i]*(1.0 - P[j,i])*F[i])
+			pSum = 1.0/(p0 + p1 + p2)
 
 			# Call maximum posterior
 			if (p0 > p1) & (p0 > p2):
-				if (p0/pSum > delta):
+				if (p0*pSum > delta):
 					G[j,i] = 0
 				else:
 					G[j,i] = -9
 			elif (p1 > p2):
-				if (p1/pSum > delta):
+				if (p1*pSum > delta):
 					G[j,i] = 1
 				else:
 					G[j,i] = -9
 			else:
-				if (p2/pSum > delta):
+				if (p2*pSum > delta):
 					G[j,i] = 2
 				else:
 					G[j,i] = -9
 
 # Create fake frequencies
-cpdef void freqs(float[:,::1] P, double[::1] f, int t) noexcept nogil:
+cpdef void freqs(float[:,::1] P, const double[::1] f) noexcept nogil:
 	cdef:
-		int m = P.shape[0]
-		int n = P.shape[1]
-		int i, j
-	for j in prange(m, num_threads=t):
-		for i in range(n):
-			P[j,i] = f[j]
+		size_t M = P.shape[0]
+		size_t N = P.shape[1]
+		size_t i, j
+		double fj
+	for j in prange(M):
+		fj = f[j]
+		for i in range(N):
+			P[j,i] = fj
