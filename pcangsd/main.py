@@ -569,9 +569,9 @@ def main():
 		if args.inbreed_samples:
 			log.write("Saved per-sample inbreeding coefficients as " + \
 				f"{args.out}.inbreed.samples\n")
-		if args.post is not None:
+		if args.post:
 			log.write(f"Saved called genotype posteriors as {args.out}.post\n")
-		if args.post_inbreed is not None:
+		if args.post_inbreed:
 			log.write(f"Saved called genotype posteriors as {args.out}.post.inbreed\n")
 		if args.geno is not None:
 			log.write("Saved called genotype matrix as " + \
