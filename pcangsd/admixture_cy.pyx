@@ -15,7 +15,7 @@ cpdef void updateF(float[:,::1] F, const float[:,::1] A, const float[:,::1] FB) 
     for j in prange(M):
         for k in range(K):
             F[j,k] = F[j,k]*A[j,k]/FB[j,k]
-            F[j,k] = min(max(F[j,k], 1e-4), 1-(1e-4))
+            F[j,k] = min(max(F[j,k], 1e-4), 1.0-(1e-4))
 
 cpdef void updateQ(float[:,::1] Q, const float[:,::1] A, const float[:,::1] QB, \
         const float alpha) noexcept nogil:
@@ -28,7 +28,7 @@ cpdef void updateQ(float[:,::1] Q, const float[:,::1] A, const float[:,::1] QB, 
         sumQ = 0.0
         for k in range(K):
             Q[i,k] = Q[i,k]*A[i,k]/(QB[i,k] + alpha)
-            Q[i,k] = min(max(Q[i,k], 1e-4), 1-(1e-4))
+            Q[i,k] = min(max(Q[i,k], 1e-4), 1.0-(1e-4))
             sumQ += Q[i,k]
         sumQ = 1.0/sumQ
         for k in range(K):

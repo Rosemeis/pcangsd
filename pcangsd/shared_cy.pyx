@@ -67,7 +67,7 @@ cpdef void emMAF_alpha(double[::1] f0, const double[::1] f1, const double[::1] f
 	c1 = computeC(&f0[0], &f1[0], &f2[0], I)
 	c2 = 1.0 - c1
 	for i in prange(I):
-		f0[i] = min(max(c2*f1[i] + c1*f2[i], 1e-5), 1-(1e-5))
+		f0[i] = min(max(c2*f1[i] + c1*f2[i], 1e-5), 1.0-(1e-5))
 
 # Inbreeding QN jump
 cpdef void inbreed_alpha(double[::1] F0, const double[::1] F1, const double[::1] F2) \

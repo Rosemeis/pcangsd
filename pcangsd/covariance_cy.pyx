@@ -35,7 +35,7 @@ cpdef void updatePCAngsd(const float[:,::1] L, float[:,::1] P, float[:,::1] E, \
 		fj = f[j]
 		for i in range(N):
 			# Update individual allele frequency
-			P[j,i] = min(max((P[j,i] + 2.0*fj)*0.5, 1e-4), 1-(1e-4))
+			P[j,i] = min(max((P[j,i] + 2.0*fj)*0.5, 1e-4), 1.0-(1e-4))
 
 			# Center dosage
 			p0 = L[j,2*i]*(1.0 - P[j,i])*(1.0 - P[j,i])
@@ -91,7 +91,7 @@ cpdef void covPCAngsd(const float[:,::1] L, float[:,::1] P, float[:,::1] E, \
 			dj = 1.0/sqrt(2.0*fj*(1.0 - fj))
 			for i in range(N):
 				# Update individual allele frequency
-				P[j,i] = min(max((P[j,i] + 2.0*fj)*0.5, 1e-4), 1-(1e-4))
+				P[j,i] = min(max((P[j,i] + 2.0*fj)*0.5, 1e-4), 1.0-(1e-4))
 
 				# Standardize dosage
 				p0 = L[j,2*i]*(1.0 - P[j,i])*(1.0 - P[j,i])
