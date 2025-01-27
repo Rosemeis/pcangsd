@@ -1,5 +1,4 @@
 # cython: language_level=3, boundscheck=False, wraparound=False, initializedcheck=False, cdivision=True
-import numpy as np
 cimport numpy as np
 from cython.parallel import prange
 from libc.math cimport log
@@ -23,13 +22,14 @@ cpdef void updateQ(float[:,::1] Q, const float[:,::1] A, const float[:,::1] QB, 
         size_t N = Q.shape[0]
         size_t K = Q.shape[1]
         size_t i, k
-        double sumQ
+        double sumQ, valQ
     for i in range(N):
         sumQ = 0.0
         for k in range(K):
-            Q[i,k] = Q[i,k]*A[i,k]/(QB[i,k] + alpha)
-            Q[i,k] = min(max(Q[i,k], 1e-4), 1.0-(1e-4))
-            sumQ += Q[i,k]
+            valQ = Q[i,k]*A[i,k]/(QB[i,k] + alpha)
+            valQ = min(max(valQ, 1e-4), 1.0-(1e-4))
+            sumQ += valQ
+            Q[i,k] = valQ
         sumQ = 1.0/sumQ
         for k in range(K):
             Q[i,k] *= sumQ

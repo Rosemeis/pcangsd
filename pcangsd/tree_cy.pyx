@@ -1,5 +1,4 @@
 # cython: language_level=3, boundscheck=False, wraparound=False, initializedcheck=False, cdivision=True
-import numpy as np
 cimport numpy as np
 from cython.parallel import prange
 from libc.math cimport sqrt
@@ -12,11 +11,12 @@ cpdef void standardizePi(const float[:,::1] P, float[:,::1] Pi, const double[::1
 		size_t M = P.shape[0]
 		size_t N = P.shape[1]
 		size_t i, j
-		float s
+		float fj, dj
 	for j in prange(M):
-		s = 1.0/sqrt(f[j]*(1.0 - f[j]))
+		fj = f[j]
+		dj = 1.0/sqrt(fj*(1.0 - fj))
 		for i in range(N):
-			Pi[j,i] = (P[j,i] - f[j])*s
+			Pi[j,i] = (P[j,i] - fj)*dj
 
 # Estimate distance matrix based on covariance matrix
 cpdef void estimateD(const float[:,::1] C, float[:,::1] D) noexcept nogil:

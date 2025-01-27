@@ -1,6 +1,6 @@
 # cython: language_level=3, boundscheck=False, wraparound=False, initializedcheck=False, cdivision=True
-import numpy as np
 cimport numpy as np
+cimport openmp as omp
 from cython.parallel import prange, parallel
 from libc.math cimport log
 from libc.stdlib cimport calloc, free
@@ -112,6 +112,8 @@ cpdef void inbreedSamples_update(const float[:,::1] L, const float[:,::1] P, \
 		double p0, p1, p2, pSum, Pi
 		double* obsH
 		double* expH
+		omp.omp_lock_t mutex
+	omp.omp_init_lock(&mutex)
 	for h in range(N):
 		Ftmp[h] = 0.0
 		Etmp[h] = 0.0
@@ -134,12 +136,18 @@ cpdef void inbreedSamples_update(const float[:,::1] L, const float[:,::1] P, \
 				# Count heterozygotes
 				obsH[i] += p1/(p0 + p1 + p2)
 				expH[i] += 2.0*Pi*(1.0 - Pi)
-		with gil:
-			for k in range(N):
-				Ftmp[k] += obsH[k]
-				Etmp[k] += expH[k]
+
+		# omp critical
+		omp.omp_set_lock(&mutex)
+		for k in range(N):
+			Ftmp[k] += obsH[k]
+			Etmp[k] += expH[k]
+		omp.omp_unset_lock(&mutex)
 		free(obsH)
 		free(expH)
+	omp.omp_destroy_lock(&mutex)
+
+	# Truncate inbreeding coefficients 
 	for l in range(N):
 		F[l] = min(max(-1.0, 1.0 - (Ftmp[l]/Etmp[l])), 1.0)
 
@@ -154,6 +162,8 @@ cpdef void inbreedSamples_accel(const float[:,::1] L, const float[:,::1] P, \
 		double p0, p1, p2, pSum, Pi
 		double* obsH
 		double* expH
+		omp.omp_lock_t mutex
+	omp.omp_init_lock(&mutex)
 	for h in range(N):
 		Ftmp[h] = 0.0
 		Etmp[h] = 0.0
@@ -176,11 +186,17 @@ cpdef void inbreedSamples_accel(const float[:,::1] L, const float[:,::1] P, \
 				# Count heterozygotes
 				obsH[i] += p1/(p0 + p1 + p2)
 				expH[i] += 2.0*Pi*(1.0 - Pi)
-		with gil:
-			for k in range(N):
-				Ftmp[k] += obsH[k]
-				Etmp[k] += expH[k]
+		
+		# omp critical
+		omp.omp_set_lock(&mutex)
+		for k in range(N):
+			Ftmp[k] += obsH[k]
+			Etmp[k] += expH[k]
+		omp.omp_unset_lock(&mutex)
 		free(obsH)
 		free(expH)
+	omp.omp_destroy_lock(&mutex)
+
+	# Truncate inbreeding coefficients 
 	for l in range(N):
 		F_new[l] = min(max(-1.0, 1.0 - (Ftmp[l]/Etmp[l])), 1.0)

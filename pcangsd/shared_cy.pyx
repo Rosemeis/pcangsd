@@ -1,5 +1,4 @@
 # cython: language_level=3, boundscheck=False, wraparound=False, initializedcheck=False, cdivision=True
-import numpy as np
 cimport numpy as np
 from cython.parallel import prange
 from libc.math cimport sqrt
@@ -61,13 +60,13 @@ cpdef void emMAF_accel(const float[:,::1] L, const double[::1] f, double[::1] f_
 cpdef void emMAF_alpha(double[::1] f0, const double[::1] f1, const double[::1] f2) \
 		noexcept nogil:
 	cdef:
-		size_t I = f0.shape[0]
-		size_t i
+		size_t M = f0.shape[0]
+		size_t j
 		double c1, c2
-	c1 = computeC(&f0[0], &f1[0], &f2[0], I)
+	c1 = computeC(&f0[0], &f1[0], &f2[0], M)
 	c2 = 1.0 - c1
-	for i in prange(I):
-		f0[i] = min(max(c2*f1[i] + c1*f2[i], 1e-5), 1.0-(1e-5))
+	for j in prange(M):
+		f0[j] = min(max(c2*f1[j] + c1*f2[j], 1e-5), 1.0-(1e-5))
 
 # Inbreeding QN jump
 cpdef void inbreed_alpha(double[::1] F0, const double[::1] F1, const double[::1] F2) \
@@ -168,12 +167,13 @@ cpdef void post(const float[:,::1] L, const float[:,::1] P, float[:,::1] G) \
 		size_t M = P.shape[0]
 		size_t N = P.shape[1]
 		size_t i, j
-		double p0, p1, p2, pSum
+		double p0, p1, p2, pi, pSum
 	for j in prange(M):
 		for i in range(N):
-			p0 = L[j,2*i]*(1.0 - P[j,i])*(1.0 - P[j,i])
-			p1 = L[j,2*i+1]*2.0*P[j,i]*(1.0 - P[j,i])
-			p2 = (1.0 - L[j,2*i] - L[j,2*i+1])*P[j,i]*P[j,i]
+			pi = P[j,i]
+			p0 = L[j,2*i]*(1.0 - pi)*(1.0 - pi)
+			p1 = L[j,2*i+1]*2.0*pi*(1.0 - pi)
+			p2 = (1.0 - L[j,2*i] - L[j,2*i+1])*pi*pi
 			pSum = 1.0/(p0 + p1 + p2)
 
 			# Fill genotype posterior array
@@ -188,13 +188,13 @@ cpdef void postInbreed(const float[:,::1] L, const float[:,::1] P, float[:,::1] 
 		size_t M = P.shape[0]
 		size_t N = P.shape[1]
 		size_t i, j
-		double p0, p1, p2, pSum
+		double p0, p1, p2, pi, pSum
 	for j in prange(M):
 		for i in range(N):
-			p0 = L[j,2*i]*((1.0 - P[j,i])*(1.0 - P[j,i]) + P[j,i]*(1.0 - P[j,i])*F[i])
-			p1 = L[j,2*i+1]*2.0*P[j,i]*(1.0 - P[j,i])
-			p2 = (1.0 - L[j,2*i] - L[j,2*i+1])*(P[j,i]*P[j,i] + \
-				P[j,i]*(1.0 - P[j,i])*F[i])
+			pi = P[j,i]
+			p0 = L[j,2*i]*((1.0 - pi)*(1.0 - pi) + pi*(1.0 - pi)*F[i])
+			p1 = L[j,2*i+1]*2.0*pi*(1.0 - pi)
+			p2 = (1.0 - L[j,2*i] - L[j,2*i+1])*(pi*pi + pi*(1.0 - pi)*F[i])
 			pSum = 1.0/(p0 + p1 + p2)
 
 			# Fill genotype posterior array
@@ -209,12 +209,13 @@ cpdef void geno(const float[:,::1] L, const float[:,::1] P, signed char[:,::1] G
 		size_t M = P.shape[0]
 		size_t N = P.shape[1]
 		size_t i, j
-		double p0, p1, p2, pSum
+		double p0, p1, p2, pi, pSum
 	for j in prange(M):
 		for i in range(N):
-			p0 = L[j,2*i]*(1.0 - P[j,i])*(1.0 - P[j,i])
-			p1 = L[j,2*i+1]*2.0*P[j,i]*(1.0 - P[j,i])
-			p2 = (1.0 - L[j,2*i] - L[j,2*i+1])*P[j,i]*P[j,i]
+			pi = P[j,i]
+			p0 = L[j,2*i]*(1.0 - pi)*(1.0 - pi)
+			p1 = L[j,2*i+1]*2.0*pi*(1.0 - pi)
+			p2 = (1.0 - L[j,2*i] - L[j,2*i+1])*pi*pi
 			pSum = 1.0/(p0 + p1 + p2)
 
 			# Call posterior maximum
@@ -241,13 +242,13 @@ cpdef void genoInbreed(const float[:,::1] L, const float[:,::1] P, const double[
 		size_t M = P.shape[0]
 		size_t N = P.shape[1]
 		size_t i, j
-		double p0, p1, p2, pSum
+		double p0, p1, p2, pi, pSum
 	for j in prange(M):
 		for i in range(N):
-			p0 = L[j,2*i]*((1.0 - P[j,i])*(1.0 - P[j,i]) + P[j,i]*(1.0 - P[j,i])*F[i])
-			p1 = L[j,2*i+1]*2.0*P[j,i]*(1.0 - P[j,i])
-			p2 = (1.0 - L[j,2*i] - L[j,2*i+1])*(P[j,i]*P[j,i] + \
-				P[j,i]*(1.0 - P[j,i])*F[i])
+			pi = P[j,i]
+			p0 = L[j,2*i]*((1.0 - pi)*(1.0 - pi) + pi*(1.0 - pi)*F[i])
+			p1 = L[j,2*i+1]*2.0*pi*(1.0 - pi)
+			p2 = (1.0 - L[j,2*i] - L[j,2*i+1])*(pi*pi + pi*(1.0 - pi)*F[i])
 			pSum = 1.0/(p0 + p1 + p2)
 
 			# Call maximum posterior
