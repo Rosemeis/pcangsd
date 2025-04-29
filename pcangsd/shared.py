@@ -41,6 +41,15 @@ def emMAF(L, iter, tole):
 		memoryview(f0)[:] = memoryview(f)
 		shared_cy.emMAF_accel(L, f, f1)
 		shared_cy.emMAF_accel(L, f1, f2)
+		
+		# Add safety check for no missingness
+		if it == 0:
+			if np.allclose(f, f1) or np.allclose(f1, f2):
+				print("EM (MAF) converged. No missingness!")
+				memoryview(f)[:] = memoryview(f2)
+				break
+		
+		# Accelerated jump
 		shared_cy.emMAF_alpha(f, f1, f2)
 
 		# Stabilization step and convergence check
