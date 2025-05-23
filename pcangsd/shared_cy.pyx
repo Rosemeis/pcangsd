@@ -142,7 +142,7 @@ cpdef void computeZ(const float[:,::1] E, const float[:,::1] B, const float[:,::
 	cdef:
 		size_t M = E.shape[0]
 		size_t N = E.shape[1]
-		size_t K = V.shape[1]
+		size_t K = Z.shape[1]
 		size_t i, j, k
 		double rec, res
 	for j in range(M):
@@ -150,8 +150,8 @@ cpdef void computeZ(const float[:,::1] E, const float[:,::1] B, const float[:,::
 		for i in range(N):
 			rec = 0.0
 			for k in range(K):
-				rec = rec + V[i,k]*B[j,k]
-			res = res + (E[j,i] - rec)*(E[j,i] - rec)
+				rec += V[i,k]*B[j,k]
+			res += (E[j,i] - rec)*(E[j,i] - rec)
 		if res > 0.0:
 			res = 1.0/sqrt(res/<double>(N-K))
 			for k in range(K):
