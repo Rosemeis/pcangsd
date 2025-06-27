@@ -26,8 +26,8 @@ def pcadaptScan(L, P, f, K):
 
 	# Perform SVD on standardized posterior expectations
 	U, S, Vt = svds(E, k=K)
-	B = np.dot(U, np.diag(S))
-	shared_cy.computeZ(E, B, np.ascontiguousarray(Vt.T), Z)
+	B = np.dot(U[:,::-1], np.diag(S[::-1]))
+	shared_cy.computeZ(E, B, np.ascontiguousarray(Vt[::-1,:].T), Z)
 	return Z
 
 # SNP weights

@@ -14,7 +14,7 @@ import sys
 from datetime import datetime
 from time import time
 
-VERSION = "1.36.3"
+VERSION = "1.36.4"
 
 # Argparse
 parser = argparse.ArgumentParser(prog="pcangsd")
