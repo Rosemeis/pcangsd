@@ -33,7 +33,7 @@ cpdef void emMAF_update(const float[:,::1] L, double[::1] f) noexcept nogil:
 		for i in range(N):
 			p0 = L[j,2*i]*(1.0 - fj)*(1.0 - fj)
 			p1 = L[j,2*i+1]*2.0*fj*(1.0 - fj)
-			p2 = (1.0 - L[j,2*i] - L[j,2*i+1])*fj*fj
+			p2 = max(0.0, 1.0 - L[j,2*i] - L[j,2*i+1])*fj*fj
 			tmp = tmp + (p1 + 2.0*p2)/(p0 + p1 + p2)
 		f[j] = tmp*s
 
@@ -52,7 +52,7 @@ cpdef void emMAF_accel(const float[:,::1] L, const double[::1] f, double[::1] f_
 		for i in range(N):
 			p0 = L[j,2*i]*(1.0 - fj)*(1.0 - fj)
 			p1 = L[j,2*i+1]*2.0*fj*(1.0 - fj)
-			p2 = (1.0 - L[j,2*i] - L[j,2*i+1])*fj*fj
+			p2 = max(0.0, 1.0 - L[j,2*i] - L[j,2*i+1])*fj*fj
 			tmp = tmp + (p1 + 2.0*p2)/(p0 + p1 + p2)
 		f_new[j] = tmp*s
 
@@ -173,13 +173,13 @@ cpdef void post(const float[:,::1] L, const float[:,::1] P, float[:,::1] G) \
 			pi = P[j,i]
 			p0 = L[j,2*i]*(1.0 - pi)*(1.0 - pi)
 			p1 = L[j,2*i+1]*2.0*pi*(1.0 - pi)
-			p2 = (1.0 - L[j,2*i] - L[j,2*i+1])*pi*pi
+			p2 = max(0.0, 1.0 - L[j,2*i] - L[j,2*i+1])*pi*pi
 			pSum = 1.0/(p0 + p1 + p2)
 
 			# Fill genotype posterior array
-			G[j,3*i] = max(1e-10, p0*pSum)
-			G[j,3*i+1] = max(1e-10, p1*pSum)
-			G[j,3*i+2] = max(1e-10, p2*pSum)
+			G[j,3*i] = p0*pSum
+			G[j,3*i+1] = p1*pSum
+			G[j,3*i+2] = p2*pSum
 
 # Genotype posteriors based on individal allele frequencies (inbreeding)
 cpdef void postInbreed(const float[:,::1] L, const float[:,::1] P, float[:,::1] G, \
@@ -194,7 +194,7 @@ cpdef void postInbreed(const float[:,::1] L, const float[:,::1] P, float[:,::1] 
 			pi = P[j,i]
 			p0 = L[j,2*i]*((1.0 - pi)*(1.0 - pi) + pi*(1.0 - pi)*F[i])
 			p1 = L[j,2*i+1]*2.0*pi*(1.0 - pi)
-			p2 = (1.0 - L[j,2*i] - L[j,2*i+1])*(pi*pi + pi*(1.0 - pi)*F[i])
+			p2 = max(0.0, 1.0 - L[j,2*i] - L[j,2*i+1])*(pi*pi + pi*(1.0 - pi)*F[i])
 			pSum = 1.0/(p0 + p1 + p2)
 
 			# Fill genotype posterior array
@@ -215,7 +215,7 @@ cpdef void geno(const float[:,::1] L, const float[:,::1] P, signed char[:,::1] G
 			pi = P[j,i]
 			p0 = L[j,2*i]*(1.0 - pi)*(1.0 - pi)
 			p1 = L[j,2*i+1]*2.0*pi*(1.0 - pi)
-			p2 = (1.0 - L[j,2*i] - L[j,2*i+1])*pi*pi
+			p2 = max(0.0, 1.0 - L[j,2*i] - L[j,2*i+1])*pi*pi
 			pSum = 1.0/(p0 + p1 + p2)
 
 			# Call posterior maximum
@@ -248,7 +248,7 @@ cpdef void genoInbreed(const float[:,::1] L, const float[:,::1] P, const double[
 			pi = P[j,i]
 			p0 = L[j,2*i]*((1.0 - pi)*(1.0 - pi) + pi*(1.0 - pi)*F[i])
 			p1 = L[j,2*i+1]*2.0*pi*(1.0 - pi)
-			p2 = (1.0 - L[j,2*i] - L[j,2*i+1])*(pi*pi + pi*(1.0 - pi)*F[i])
+			p2 = max(0.0, 1.0 - L[j,2*i] - L[j,2*i+1])*(pi*pi + pi*(1.0 - pi)*F[i])
 			pSum = 1.0/(p0 + p1 + p2)
 
 			# Call maximum posterior

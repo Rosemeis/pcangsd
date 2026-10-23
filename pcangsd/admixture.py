@@ -116,8 +116,8 @@ def alphaSearch(L, P, K, aEnd, iter, tole, batch, depth, rng):
 			print(f"Depth={d+2},\tRunning Alpha={aMid}")
 			QT, FT, lT = admixNMF(L, P, K, aMid, iter, tole, batch, rng, False)
 			if lT > lB:
-				memoryview(QB.ravel())[:] = memoryview(QT)
-				memoryview(FB.ravel())[:] = memoryview(FT)
+				np.copyto(QB, QT)
+				np.copyto(FB, FT)
 				lB = lT
 				aL = 1
 				aB = aMid
@@ -125,8 +125,8 @@ def alphaSearch(L, P, K, aEnd, iter, tole, batch, depth, rng):
 			print(f"Depth={d+2},\tRunning Alpha={aMin}")
 			QT, FT, lT = admixNMF(L, P, K, aMin, iter, tole, batch, rng, False)
 			if lT > lB:
-				memoryview(QB.ravel())[:] = memoryview(QT)
-				memoryview(FB.ravel())[:] = memoryview(FT)
+				np.copyto(QB, QT)
+				np.copyto(FB, FT)
 				lB = lT
 				aL = 0
 				aB = aMin
@@ -134,8 +134,8 @@ def alphaSearch(L, P, K, aEnd, iter, tole, batch, depth, rng):
 				print(f"Depth={d+2},\tRunning Alpha={aMax}")
 				QT, FT, lT = admixNMF(L, P, K, aMax, iter, tole, batch, rng, False)
 				if lT > lB:
-					memoryview(QB.ravel())[:] = memoryview(QT)
-					memoryview(FB.ravel())[:] = memoryview(FT)
+					np.copyto(QB, QT)
+					np.copyto(FB, FT)
 					lB = lT
 					aL = 2
 					aB = aMax

@@ -46,6 +46,6 @@ cpdef double loglike(const float[:,::1] L, const float[:,::1] X) noexcept nogil:
         for i in range(N):
             l0 = L[j,2*i]*(1.0 - X[j,i])*(1.0 - X[j,i])
             l1 = L[j,2*i+1]*2.0*X[j,i]*(1 - X[j,i])
-            l2 = (1.0 - L[j,2*i] - L[j,2*i+1])*X[j,i]*X[j,i]
+            l2 = max(0.0, 1.0 - L[j,2*i] - L[j,2*i+1])*X[j,i]*X[j,i]
             ll += log(l0 + l1 + l2)
     return ll

@@ -14,7 +14,7 @@ import sys
 from datetime import datetime
 from time import time
 
-VERSION = "1.36.4"
+VERSION = "1.37.0"
 
 # Argparse
 parser = argparse.ArgumentParser(prog="pcangsd")
@@ -483,8 +483,7 @@ def main():
 			print(f"Automatic search for best alpha with depth={args.admix_depth}")
 			print(f"K={a_K}, Batches={args.admix_batch}, Seed={args.admix_seed}")
 			Q, F, lB, aB = admixture.alphaSearch(L, P, a_K, args.admix_auto, \
-				args.admix_iter, args.admix_tole, args.admix_batch, rng, \
-				args.admix_depth)
+				args.admix_iter, args.admix_tole, args.admix_batch, args.admix_depth, rng)
 			print(f"Search concluded: Alpha={aB}, log-likelihood={lB}")
 
 		# Save factor matrices

@@ -20,7 +20,7 @@ cpdef void updateNormal(const float[:,::1] L, float[:,::1] E, const double[::1] 
 			# Update dosage
 			p0 = L[j,2*i]*(1.0 - fj)*(1.0 - fj)
 			p1 = L[j,2*i+1]*2.0*fj*(1.0 - fj)
-			p2 = (1.0 - L[j,2*i] - L[j,2*i+1])*fj*fj
+			p2 = max(0.0, 1.0 - L[j,2*i] - L[j,2*i+1])*fj*fj
 			E[j,i] = (p1 + 2.0*p2)/(p0 + p1 + p2) - 2.0*fj
 
 # Update posterior expectations (PCAngsd method)
@@ -39,7 +39,7 @@ cpdef void updatePCAngsd(const float[:,::1] L, float[:,::1] P, float[:,::1] E, \
 			# Center dosage
 			p0 = L[j,2*i]*(1.0 - pi)*(1.0 - pi)
 			p1 = L[j,2*i+1]*2.0*pi*(1.0 - pi)
-			p2 = (1.0 - L[j,2*i] - L[j,2*i+1])*pi*pi
+			p2 = max(0.0, 1.0 - L[j,2*i] - L[j,2*i+1])*pi*pi
 			E[j,i] = (p1 + 2.0*p2)/(p0 + p1 + p2) - 2.0*fj
 			P[j,i] = pi
 
@@ -63,7 +63,7 @@ cpdef void covNormal(const float[:,::1] L, float[:,::1] E, const double[::1] f, 
 				# Standardize dosage
 				p0 = L[j,2*i]*(1.0 - fj)*(1.0 - fj)
 				p1 = L[j,2*i+1]*2.0*fj*(1.0 - fj)
-				p2 = (1.0 - L[j,2*i] - L[j,2*i+1])*fj*fj
+				p2 = max(0.0, 1.0 - L[j,2*i] - L[j,2*i+1])*fj*fj
 				pSum = p0 + p1 + p2
 				E[j,i] = ((p1 + 2.0*p2)/pSum - 2.0*fj)*dj
 
@@ -103,7 +103,7 @@ cpdef void covPCAngsd(const float[:,::1] L, float[:,::1] P, float[:,::1] E, \
 				# Standardize dosage
 				p0 = L[j,2*i]*(1.0 - pi)*(1.0 - pi)
 				p1 = L[j,2*i+1]*2.0*pi*(1.0 - pi)
-				p2 = (1.0 - L[j,2*i] - L[j,2*i+1])*pi*pi
+				p2 = max(0.0, 1.0 - L[j,2*i] - L[j,2*i+1])*pi*pi
 				pSum = p0 + p1 + p2
 				E[j,i] = ((p1 + 2.0*p2)/pSum - 2.0*fj)*dj
 				P[j,i] = pi
@@ -137,7 +137,7 @@ cpdef void updateSelection(const float[:,::1] L, const float[:,::1] P, float[:,:
 			pi = P[j,i]
 			p0 = L[j,2*i]*(1.0 - pi)*(1.0 - pi)
 			p1 = L[j,2*i+1]*2.0*pi*(1.0 - pi)
-			p2 = (1.0 - L[j,2*i] - L[j,2*i+1])*pi*pi
+			p2 = max(0.0, 1.0 - L[j,2*i] - L[j,2*i+1])*pi*pi
 			E[j,i] = ((p1 + 2.0*p2)/(p0 + p1 + p2) - 2.0*fj)*dj
 
 # Update dosages for saving
@@ -153,5 +153,5 @@ cpdef void updateDosages(const float[:,::1] L, const float[:,::1] P, float[:,::1
 			pi = P[j,i]
 			p0 = L[j,2*i]*(1.0 - pi)*(1.0 - pi)
 			p1 = L[j,2*i+1]*2.0*pi*(1.0 - pi)
-			p2 = (1.0 - L[j,2*i] - L[j,2*i+1])*pi*pi
+			p2 = max(0.0, 1.0 - L[j,2*i] - L[j,2*i+1])*pi*pi
 			E[j,i] = (p1 + 2.0*p2)/(p0 + p1 + p2)

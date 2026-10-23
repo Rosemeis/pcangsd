@@ -28,7 +28,7 @@ cpdef void inbreedSites_update(const float[:,::1] L, const float[:,::1] P, \
 			# Readjust distribution and estimate posterior
 			p0 = p0*pSum*L[j,2*i]
 			p1 = p1*pSum*L[j,2*i+1]
-			p2 = p2*pSum*(1.0 - L[j,2*i] - L[j,2*i+1])
+			p2 = p2*pSum*max(0.0, 1.0 - L[j,2*i] - L[j,2*i+1])
 
 			# Count heterozygotes
 			obsH = obsH + p1/(p0 + p1 + p2)
@@ -59,7 +59,7 @@ cpdef void inbreedSites_accel(const float[:,::1] L, const float[:,::1] P, \
 			# Readjust distribution and estimate posterior
 			p0 = p0*pSum*L[j,2*i]
 			p1 = p1*pSum*L[j,2*i+1]
-			p2 = p2*pSum*(1.0 - L[j,2*i] - L[j,2*i+1])
+			p2 = p2*pSum*max(0.0, 1.0 - L[j,2*i] - L[j,2*i+1])
 
 			# Count heterozygotes
 			obsH = obsH + p1/(p0 + p1 + p2)
@@ -92,13 +92,13 @@ cpdef void loglike(const float[:,::1] L, const float[:,::1] P, const double[::1]
 			# Readjust distribution and posterior
 			p0 = p0*pSum*L[j,2*i]
 			p1 = p1*pSum*L[j,2*i+1]
-			p2 = p2*pSum*(1.0 - L[j,2*i] - L[j,2*i+1])
+			p2 = p2*pSum*max(0.0, 1.0 - L[j,2*i] - L[j,2*i+1])
 			logA = logA + log(p0 + p1 + p2)
 
 			# Null model
 			l0 = L[j,2*i]*(1.0 - Pi)*(1.0 - Pi)
 			l1 = L[j,2*i+1]*2.0*Pi*(1.0 - Pi)
-			l2 = (1.0 - L[j,2*i] - L[j,2*i+1])*Pi*Pi
+			l2 = max(0.0, 1.0 - L[j,2*i] - L[j,2*i+1])*Pi*Pi
 			logN = logN + log(l0 + l1 + l2)
 		T[j] = 2.0*(logA - logN)
 
@@ -131,7 +131,7 @@ cpdef void inbreedSamples_update(const float[:,::1] L, const float[:,::1] P, \
 				# Readjust distribution and estimate posterior
 				p0 = p0*pSum*L[j,2*i]
 				p1 = p1*pSum*L[j,2*i+1]
-				p2 = p2*pSum*(1.0 - L[j,2*i] - L[j,2*i+1])
+				p2 = p2*pSum*max(0.0, 1.0 - L[j,2*i] - L[j,2*i+1])
 
 				# Count heterozygotes
 				obsH[i] += p1/(p0 + p1 + p2)
@@ -181,7 +181,7 @@ cpdef void inbreedSamples_accel(const float[:,::1] L, const float[:,::1] P, \
 				# Readjust distribution and estimate posterior
 				p0 = p0*pSum*L[j,2*i]
 				p1 = p1*pSum*L[j,2*i+1]
-				p2 = p2*pSum*(1.0 - L[j,2*i] - L[j,2*i+1])
+				p2 = p2*pSum*max(0.0, 1.0 - L[j,2*i] - L[j,2*i+1])
 
 				# Count heterozygotes
 				obsH[i] += p1/(p0 + p1 + p2)
